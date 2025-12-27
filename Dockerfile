@@ -18,5 +18,8 @@ COPY . .
 # Environment variables
 ENV PYTHONUNBUFFERED=1
 
+# Expose port 8000 for Koyeb health check
+EXPOSE 8000
+
 # Run the bot
 CMD ["python", "bot.py"]
