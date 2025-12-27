@@ -233,8 +233,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 I can help you convert <b>TeraBox</b> links to direct video links!
 
 <b>How to use:</b>
-Just send me a TeraBox link like:
-<code>https://1024terabox.com/s/1jggGfxx...</code>
+Just send me a TeraBox link :
 
 I will fetch the video and send it to you! 🚀"""
     )
@@ -270,6 +269,10 @@ async def download_video(url, output_template, progress_hook):
         'concurrent_fragment_downloads': 5, # Download multiple fragments in parallel
         'buffersize': 1024 * 1024, # 1MB buffer
         'http_chunk_size': 10485760, # 10MB chunks
+        # FFmpeg Post-processing for FastStart (Move moov atom to front)
+        'postprocessor_args': {
+            'ffmpeg': ['-movflags', '+faststart']
+        },
     }
     
     loop = asyncio.get_running_loop()
