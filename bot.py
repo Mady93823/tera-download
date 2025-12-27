@@ -477,7 +477,7 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
                             chat_id=CLOUD_CHANNEL_ID,
                             video=video_file, # This works because it has read()
                             caption=(
-                                f"🆔: {file_id}\n"
+                                f"🆔: <code>{file_id}<code>\n"
                                 f"🎬: {video_title}\n\n"
                                 f"👤 <b>Requested by:</b> {user.mention_html()}\n"
                                 f"🆔 <b>User ID:</b> <code>{user.id}</code>"
