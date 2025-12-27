@@ -83,7 +83,7 @@ class ProgressFileReader:
         
         # Throttle updates to avoid flood wait
         now = time.time()
-        if now - self._last_update_time > 3 or self._read_so_far == self._total_size:
+        if now - self._last_update_time > 5 or self._read_so_far == self._total_size:
             self._last_update_time = now
             self._callback(self._read_so_far, self._total_size)
             
@@ -113,7 +113,7 @@ class ProgressHook:
     def __call__(self, d):
         if d['status'] == 'downloading':
             now = time.time()
-            if now - self.last_update > 2:  # Update every 2 seconds
+            if now - self.last_update > 5:  # Update every 5 seconds (Optimized)
                 self.last_update = now
                 percent = d.get('_percent_str', 'N/A')
                 speed = d.get('_speed_str', 'N/A')
@@ -477,7 +477,7 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
                             chat_id=CLOUD_CHANNEL_ID,
                             video=video_file, # This works because it has read()
                             caption=(
-                                f"🆔: {file_id}\n"
+                                f"🆔 <code>{file_id}</code>\n"
                                 f"🎬: {video_title}\n\n"
                                 f"👤 <b>Requested by:</b> {user.mention_html()}\n"
                                 f"🆔 <b>User ID:</b> <code>{user.id}</code>"
@@ -494,6 +494,23 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
                             db.add_video(file_id, telegram_file_id, video_title)
                 except Exception as e:
                     logger.error(f"Failed to upload to Cloud Channel: {e}")
+
+            # Send log to LOG_CHANNEL_ID
+            if LOG_CHANNEL_ID and telegram_file_id:
+                try:
+                    await context.bot.send_message(
+                        chat_id=LOG_CHANNEL_ID,
+                        text=(
+                            f"📝 <b>New Video Processed!</b>\n\n"
+                            f"🎬 <b>Title:</b> {video_title}\n"
+                            f"🆔 <b>TeraBox ID:</b> <code>{file_id}</code>\n"
+                            f"👤 <b>User:</b> {user.mention_html()} (<code>{user.id}</code>)\n"
+                            f"💾 <b>File ID:</b> <code>{telegram_file_id}</code>"
+                        ),
+                        parse_mode='HTML'
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send log to LOG_CHANNEL: {e}")
 
             # 2. Send to User
             if sent_to_cloud and telegram_file_id:
