@@ -5,3 +5,4 @@ gunicorn
 requests
 python-dotenv
 pymongo
+terabox-downloader

@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from db import Database
+from TeraboxDL import TeraboxDL
 
 # Load environment variables
 load_dotenv()
@@ -27,9 +28,13 @@ TOKEN = os.getenv('BOT_TOKEN')
 CLOUD_CHANNEL_ID = os.getenv('CLOUD_CHANNEL_ID')
 LOG_CHANNEL_ID = os.getenv('LOG_CHANNEL_ID')
 ADMIN_ID = int(os.getenv('ADMIN_ID', 0))
+TERABOX_COOKIE = os.getenv('TERABOX_COOKIE')
 
 if not CLOUD_CHANNEL_ID:
     logger.warning("⚠️ CLOUD_CHANNEL_ID is not set in .env! Videos will NOT be uploaded to a channel.")
+
+if not TERABOX_COOKIE:
+    logger.warning("⚠️ TERABOX_COOKIE is not set in .env! Downloading might fail.")
 
 # Initialize Database
 db = Database()
@@ -144,66 +149,33 @@ class ProgressHook:
                         self.loop
                     )
 
-def get_iteraplay_video_info(terabox_url):
+def get_video_info(terabox_url):
     """
-    Extracts the video info (url, title, thumbnail) using the iteraplay.com API.
+    Extracts the video info (url, title, thumbnail) using terabox-downloader.
     """
+    if not TERABOX_COOKIE:
+        logger.error("TERABOX_COOKIE not set.")
+        return None
+
     try:
-        encoded_url = urllib.parse.quote(terabox_url)
-        iteraplay_play_url = f"https://iteraplay.com/api/play.php?url={encoded_url}&key=iTeraPlay2025"
-        iteraplay_stream_url = "https://iteraplay.com/api/stream.php"
-
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Referer': iteraplay_play_url,
-            'Origin': 'https://iteraplay.com',
-            'Content-Type': 'application/json'
+        terabox = TeraboxDL(TERABOX_COOKIE)
+        file_info = terabox.get_file_info(terabox_url)
+        
+        if "error" in file_info:
+            logger.error(f"TeraboxDL error: {file_info['error']}")
+            return None
+            
+        result = {
+            'title': file_info.get('file_name', 'TeraBox Video'),
+            'thumbnail': file_info.get('thumbnail', None),
+            'url': file_info.get('download_link', None)
         }
-
-        session = requests.Session()
         
-        # Step 1: Get play page to set cookies
-        logger.info(f"Fetching play page: {iteraplay_play_url}")
-        session.get(iteraplay_play_url, headers=headers)
-        
-        # Step 2: Post to stream API
-        logger.info("Posting to stream API...")
-        payload = {"url": terabox_url}
-        response = session.post(iteraplay_stream_url, headers=headers, json=payload)
-        
-        if response.status_code == 200:
-            data = response.json()
-            if 'list' in data and len(data['list']) > 0:
-                file_info = data['list'][0]
-                
-                result = {
-                    'title': file_info.get('name') or file_info.get('server_filename', 'TeraBox Video'),
-                    'thumbnail': file_info.get('thumbnail', None),
-                    'url': None
-                }
-
-                if 'fast_stream_url' in file_info:
-                    streams = file_info['fast_stream_url']
-                    if isinstance(streams, dict):
-                        # Prioritize quality
-                        for quality in ['1080p', '720p', '480p', '360p']:
-                            if quality in streams:
-                                result['url'] = streams[quality]
-                                break
-                        if not result['url']:
-                            result['url'] = list(streams.values())[0]
-                    else:
-                        result['url'] = streams # It might be a string directly
-                
-                if result['url']:
-                    return result
-
-            logger.error(f"No video found in API response: {data}")
-        else:
-            logger.error(f"API request failed with status {response.status_code}: {response.text}")
+        if result['url']:
+            return result
             
     except Exception as e:
-        logger.error(f"Error extracting iteraplay URL: {e}")
+        logger.error(f"Error extracting video info: {e}")
     
     return None
 
@@ -257,10 +229,6 @@ async def download_video(url, output_template, progress_hook):
         'noplaylist': True,
         'quiet': True,
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'http_headers': {
-            'Referer': 'https://iteraplay.com/',
-            'Origin': 'https://iteraplay.com',
-        },
         'progress_hooks': [progress_hook],
         'socket_timeout': 30,  # Increase timeout
         'retries': 10,        # Retry on 5xx or timeout
@@ -274,6 +242,10 @@ async def download_video(url, output_template, progress_hook):
             'ffmpeg': ['-movflags', '+faststart']
         },
     }
+    
+    # Add cookies if available
+    if TERABOX_COOKIE:
+         ydl_opts['http_headers'] = {'Cookie': TERABOX_COOKIE}
     
     loop = asyncio.get_running_loop()
     
@@ -390,8 +362,8 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Initial status message
     status_msg = await message.reply_text(f"🔍 <b>Analyzing Link...</b>\nPlease wait a moment.", parse_mode='HTML')
 
-    # Get video info from iteraplay
-    video_info = get_iteraplay_video_info(terabox_url)
+    # Get video info
+    video_info = get_video_info(terabox_url)
     
     if not video_info or not video_info['url']:
         await context.bot.edit_message_text(chat_id=message.chat_id, message_id=status_msg.message_id, 
