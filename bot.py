@@ -4,7 +4,7 @@ import logging
 import time
 import asyncio
 import urllib.parse
-from flask import Flask
+from flask import Flask, send_from_directory
 from threading import Thread
 import yt_dlp
 import requests
@@ -29,6 +29,7 @@ CLOUD_CHANNEL_ID = os.getenv('CLOUD_CHANNEL_ID')
 LOG_CHANNEL_ID = os.getenv('LOG_CHANNEL_ID')
 ADMIN_ID = int(os.getenv('ADMIN_ID', 0))
 TERABOX_COOKIE = os.getenv('TERABOX_COOKIE')
+BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
 
 if not CLOUD_CHANNEL_ID:
     logger.warning("⚠️ CLOUD_CHANNEL_ID is not set in .env! Videos will NOT be uploaded to a channel.")
@@ -47,6 +48,11 @@ app = Flask('')
 @app.route('/')
 def home():
     return "I am alive"
+
+@app.route('/watch/<path:filename>')
+def stream_video(filename):
+    # Enable Range requests for streaming
+    return send_from_directory('downloads', filename)
 
 def run():
     app.run(host='0.0.0.0', port=8000)
@@ -393,6 +399,8 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     progress_hook = ProgressHook(context.bot, message.chat_id, status_msg.message_id)
 
     filename = None
+    should_delete_immediately = True # Flag to control deletion
+
     try:
         # Run download in executor
         filename, info = await download_video(direct_url, output_template, progress_hook)
@@ -403,11 +411,32 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Check file size (Telegram bot limit 50MB)
         file_size = os.path.getsize(filename)
         if file_size > 50 * 1024 * 1024:
+            # Construct Stream Link
+            file_basename = os.path.basename(filename)
+            stream_link = f"{BASE_URL}/watch/{file_basename}"
+            
             await message.reply_text(
                 f"⚠️ <b>File too large for Telegram!</b> ({file_size/1024/1024:.2f} MB)\n\n"
-                f"🔗 <b>Direct Stream Link:</b>\n{direct_url}", 
+                f"🔗 <b>Stream/Download Link:</b>\n{stream_link}\n\n"
+                f"<i>Link expires in 30 minutes.</i>",
                 parse_mode='HTML'
             )
+            
+            should_delete_immediately = False
+            
+            # Schedule deletion
+            async def delete_later(f_path, delay):
+                await asyncio.sleep(delay)
+                try:
+                    if os.path.exists(f_path):
+                        os.remove(f_path)
+                        logger.info(f"Deleted expired file: {f_path}")
+                except Exception as e:
+                    logger.error(f"Error deleting expired file {f_path}: {e}")
+
+            # Run deletion task in background (30 mins = 1800 sec)
+            asyncio.create_task(delete_later(filename, 1800))
+            
         else:
             caption = f"🎬 <b>{video_title}</b>"
             
@@ -521,7 +550,7 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
         await message.reply_text(f"❌ <b>Error processing video:</b> {str(e)}", parse_mode='HTML')
     finally:
         # Cleanup
-        if filename and os.path.exists(filename):
+        if should_delete_immediately and filename and os.path.exists(filename):
             try:
                 os.remove(filename)
                 logger.info(f"Deleted file: {filename}")
