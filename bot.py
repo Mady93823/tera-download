@@ -4,6 +4,7 @@ import logging
 import time
 import asyncio
 import urllib.parse
+import subprocess
 from flask import Flask, send_from_directory
 from threading import Thread
 import yt_dlp
@@ -41,7 +42,7 @@ if not TERABOX_COOKIE:
 db = Database()
 
 # Regex pattern for TeraBox links
-TERABOX_PATTERN = r"https?://(?:www\.)?(?:1024)?terabox[a-z0-9]*\.[a-z]+/(?:s/|wap/share/filelist\?surl=)([a-zA-Z0-9_-]+)"
+TERABOX_PATTERN = r"https?://(?:www\.)?(?:1024tera|terabox|teraboxapp|mirrobox|nephobox|freeterabox|4funbox|momerybox|tibibox|terasharelink)\.com/(?:s/|wap/share/filelist\?surl=)([a-zA-Z0-9_-]+)"
 
 app = Flask('')
 
@@ -259,6 +260,28 @@ async def download_video(url, output_template, progress_hook):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
+            
+            # Manual FastStart (Force moov atom to front)
+            try:
+                if filename.endswith('.mp4'):
+                    faststart_filename = filename + ".temp.mp4"
+                    logger.info(f"Running FastStart on {filename}...")
+                    
+                    # Run ffmpeg command
+                    result = subprocess.run(
+                        ['ffmpeg', '-y', '-i', filename, '-c', 'copy', '-movflags', '+faststart', faststart_filename],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE
+                    )
+                    
+                    if result.returncode == 0 and os.path.exists(faststart_filename):
+                        os.replace(faststart_filename, filename)
+                        logger.info("FastStart complete.")
+                    else:
+                        logger.error(f"FastStart failed: {result.stderr.decode()}")
+            except Exception as e:
+                logger.error(f"FastStart exception: {e}")
+
             return filename, info
 
     return await loop.run_in_executor(None, run_yt_dlp)

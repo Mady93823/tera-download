@@ -1,59 +1,73 @@
-# TeraBox Downloader Bot 🚀
+# TeraBox Downloader Telegram Bot
 
-A high-performance Telegram bot to download and stream videos from TeraBox links directly to Telegram.
+A high-performance Telegram bot that downloads videos from various TeraBox domains, optimizes them for streaming, and uploads them to Telegram.
 
-## Features ✨
+## Features
+- 🚀 **Multi-Domain Support**: Works with `terabox.com`, `teraboxapp.com`, `1024tera.com`, and many more.
+- 📱 **Streaming Optimized**: Automatically converts videos to `FastStart` (moov atom at front) for instant playback on mobile devices without full downloading.
+- 📺 **Direct Stream Link**: Generates a direct stream link for large files (>50MB) that exceeds Telegram's bot upload limit.
+- ⚡ **High Speed**: Uses `yt-dlp` with multi-threaded downloading.
+- 🍪 **Cookie Support**: Bypasses login restrictions using cookies.
+- ☁️ **Cloud Channel**: Optionally uploads to a private channel for storage.
+- 📊 **Admin Dashboard**: View user stats and broadcast messages.
 
-- **Fast Downloads**: Optimized for speed with multi-threaded downloading and chunked uploads.
-- **Smart Streaming**: Videos are optimized for streaming (FastStart), so you can watch without waiting for full download.
-- **Cloud Storage**: Automatically uploads videos to a private channel for instant future access.
-- **Direct Stream Links**: Supports direct streaming links if files are too large (>50MB).
-- **User Friendly**: Colorful progress bars for both download and upload.
-- **Admin Tools**: Broadcast messages to all users and track user statistics.
-- **Smart Caching**: Checks MongoDB database before downloading to serve instantly if available.
+## Deployment on Koyeb
 
-## Setup 🛠️
+1. **Fork/Clone this repository.**
 
-1. **Clone the repository**
-2. **Install dependencies**:
+2. **Create a Koyeb Account** at [koyeb.com](https://www.koyeb.com/).
+
+3. **Create a New App**:
+   - Select **GitHub** as the deployment method.
+   - Choose this repository.
+
+4. **Configure Environment Variables**:
+   In the **Settings** -> **Environment Variables** section, add the following:
+
+   | Variable | Description |
+   | :--- | :--- |
+   | `BOT_TOKEN` | Your Telegram Bot Token from @BotFather. |
+   | `API_ID` | Your Telegram API ID (optional/if used). |
+   | `API_HASH` | Your Telegram API Hash (optional/if used). |
+   | `ADMIN_ID` | Your Telegram User ID (get it from @userinfobot). |
+   | `CLOUD_CHANNEL_ID` | (Optional) Channel ID to forward videos to (e.g., `-100xxxx`). |
+   | `LOG_CHANNEL_ID` | (Optional) Channel ID for logs. |
+   | `TERABOX_COOKIE` | **Required**. Your `ndus` cookie from TeraBox. |
+   | `BASE_URL` | **Required**. Your Koyeb App Public URL (e.g., `https://my-app.koyeb.app`). |
+
+   > **How to get TERABOX_COOKIE**:
+   > 1. Login to TeraBox on your browser.
+   > 2. Open Developer Tools (F12) -> Application -> Cookies.
+   > 3. Find the cookie named `ndus` and copy its value.
+
+5. **Deploy**:
+   - Click **Deploy**.
+   - Wait for the build to finish.
+   - Once "Healthy", your bot is ready!
+
+## Local Development
+
+1. Clone the repo:
+   ```bash
+   git clone https://github.com/yourusername/tera-bot.git
+   cd tera-bot
+   ```
+
+2. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-3. **Configure Environment**:
-   Create a `.env` file with the following:
-   ```ini
-   BOT_TOKEN=your_bot_token
-   CLOUD_CHANNEL_ID=-100xxxxxxxxxx  # Channel for video storage
-   LOG_CHANNEL_ID=-100xxxxxxxxxx    # Channel for logs
-   ADMIN_ID=123456789               # Your Telegram User ID
-   MONGO_URL=mongodb+srv://...      # Your MongoDB Connection URL
-   COLLECTION_NAME=TERABOX          # Default: TERABOX
+
+3. Setup `.env` file (see `.env.example`).
+
+4. Run the bot:
+   ```bash
+   python bot.py
    ```
 
-## Admin Commands 👑
+## Requirements
+- Python 3.9+
+- FFmpeg (installed on the system)
 
-These commands are only available to the user with `ADMIN_ID`.
-
-- `/users`: View the total number of users who have started the bot.
-- `/broadcast <message>`: Send a message to all users of the bot.
-  - Example: `/broadcast Hello everyone! We have a new update.`
-- `/del <terabox_id>`: Delete a video from the database.
-
-## Deployment 🌍
-
-### Local
-Run `python bot.py`
-
-### Koyeb / Docker
-The project includes a `Dockerfile` and is ready for deployment on platforms like Koyeb.
-Ensure you set the environment variables in your deployment dashboard.
-
-## Technologies 💻
-- Python 3.9
-- python-telegram-bot
-- yt-dlp (with FFmpeg optimization)
-- Flask (Keep-alive)
-- MongoDB (pymongo)
-
----
-*Made with ❤️*
+## License
+MIT
