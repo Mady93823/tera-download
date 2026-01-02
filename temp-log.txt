@@ -1,0 +1,144 @@
+2026-01-02 09:31:16,838 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/sendMessage "HTTP/1.1 200 OK"
+TeraboxDL v1.8, Copyright (C) 2026 Damantha Jasinghe <https://github.com/Damantha126>
+Licensed under the terms of the MIT License, Massachusetts Institute of Technology (MIT)
+2026-01-02 09:31:23,194 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/editMessageText "HTTP/1.1 200 OK"
+Deprecated Feature: Support for Python version 3.9 has been deprecated. Please update to Python 3.10 or above
+Deprecated Feature: Passing cookies as a header is a potential security risk; they will be scoped to the domain of the downloaded urls. Please consider loading cookies from a file or browser instead.
+2026-01-02 09:31:26,398 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/getUpdates "HTTP/1.1 200 OK"
+2026-01-02 09:31:36,417 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/getUpdates "HTTP/1.1 200 OK"
+2026-01-02 09:31:39,293 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/editMessageText "HTTP/1.1 200 OK"
+2026-01-02 09:31:45,205 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/editMessageText "HTTP/1.1 200 OK"
+2026-01-02 09:31:46,493 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/getUpdates "HTTP/1.1 200 OK"
+2026-01-02 09:31:49,994 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/editMessageText "HTTP/1.1 200 OK"
+2026-01-02 09:31:55,696 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/editMessageText "HTTP/1.1 200 OK"
+2026-01-02 09:31:56,192 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/editMessageText "HTTP/1.1 200 OK"
+2026-01-02 09:31:56,415 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/sendMessage "HTTP/1.1 200 OK"
+2026-01-02 09:31:56,512 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/getUpdates "HTTP/1.1 200 OK"
+2026-01-02 09:31:56,599 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/deleteMessage "HTTP/1.1 200 OK"
+2026-01-02 09:31:56,828 - werkzeug - INFO - 10.250.0.21 - - [02/Jan/2026 09:31:56] "GET /watch/1XxtK0sGGu9ykQtgnx0Wviw.mp4 HTTP/1.1" 200 -
+2026-01-02 09:32:06,532 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/getUpdates "HTTP/1.1 200 OK"
+2026-01-02 09:32:10,905 - werkzeug - INFO - 10.250.0.22 - - [02/Jan/2026 09:32:10] "GET /watch/1XxtK0sGGu9ykQtgnx0Wviw.mp4 HTTP/1.1" 200 -
+2026-01-02 09:32:11,898 - werkzeug - INFO - 10.250.0.22 - - [02/Jan/2026 09:32:11] "GET /watch/1XxtK0sGGu9ykQtgnx0Wviw.mp4 HTTP/1.1" 304 -
+2026-01-02 09:32:12,997 - werkzeug - INFO - 10.250.0.22 - - [02/Jan/2026 09:32:12] "GET /watch/1XxtK0sGGu9ykQtgnx0Wviw.mp4 HTTP/1.1" 200 -
+2026-01-02 09:32:16,593 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/getUpdates "HTTP/1.1 200 OK"
+2026-01-02 09:32:26,615 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/getUpdates "HTTP/1.1 200 OK"
+2026-01-02 09:32:27,984 - werkzeug - INFO - 10.250.0.22 - - [02/Jan/2026 09:32:27] "GET /watch/1XxtK0sGGu9ykQtgnx0Wviw.mp4 HTTP/1.1" 200 -
+2026-01-02 09:32:28,397 - werkzeug - INFO - 10.250.0.20 - - [02/Jan/2026 09:32:28] "GET /watch/1XxtK0sGGu9ykQtgnx0Wviw.mp4 HTTP/1.1" 304 -
+2026-01-02 09:32:32,895 - werkzeug - INFO - 10.250.0.21 - - [02/Jan/2026 09:32:32] "GET /watch/1XxtK0sGGu9ykQtgnx0Wviw.mp4 HTTP/1.1" 304 -
+2026-01-02 09:32:35,176 - werkzeug - INFO - 10.250.0.20 - - [02/Jan/2026 09:32:35] "GET /watch/1XxtK0sGGu9ykQtgnx0Wviw.mp4 HTTP/1.1" 304 -
+2026-01-02 09:32:36,634 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/getUpdates "HTTP/1.1 200 OK"
+2026-01-02 09:32:37,196 - werkzeug - INFO - 10.250.0.21 - - [02/Jan/2026 09:32:37] "GET /watch/1XxtK0sGGu9ykQtgnx0Wviw.mp4 HTTP/1.1" 304 -
+2026-01-02 09:32:38,395 - werkzeug - INFO - 10.250.0.20 - - [02/Jan/2026 09:32:38] "GET /watch/1XxtK0sGGu9ykQtgnx0Wviw.mp4 HTTP/1.1" 304 -
+2026-01-02 09:32:40,080 - werkzeug - INFO - 10.250.0.21 - - [02/Jan/2026 09:32:40] "GET /watch/1XxtK0sGGu9ykQtgnx0Wviw.mp4 HTTP/1.1" 304 -
+2026-01-02 09:32:46,654 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/getUpdates "HTTP/1.1 200 OK"
+2026-01-02 09:32:56,672 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/getUpdates "HTTP/1.1 200 OK"
+2026-01-02 09:33:06,691 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/getUpdates "HTTP/1.1 200 OK"
+2026-01-02 09:33:14,630 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/getUpdates "HTTP/1.1 200 OK"
+2026-01-02 09:33:15,384 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/sendMessage "HTTP/1.1 200 OK"
+
+[download]   0.5% of  191.95MiB at   15.20MiB/s ETA 00:12
+[download]   1.6% of  191.95MiB at   12.12MiB/s ETA 00:15
+[download]   3.6% of  191.95MiB at   12.79MiB/s ETA 00:14
+[download]   5.0% of  191.95MiB at   14.63MiB/s ETA 00:12
+[download]   5.5% of  191.95MiB at    1.37MiB/s ETA 02:12
+[download]   6.2% of  191.95MiB at    3.08MiB/s ETA 00:58
+[download]   7.6% of  191.95MiB at    5.29MiB/s ETA 00:33
+[download]   9.7% of  191.95MiB at    7.78MiB/s ETA 00:22
+[download]   9.9% of  191.95MiB at    8.14MiB/s ETA 00:21
+[download]  10.5% of  191.95MiB at    1.43MiB/s ETA 02:00
+[download]  11.2% of  191.95MiB at    3.15MiB/s ETA 00:54
+[download]  12.7% of  191.95MiB at    6.04MiB/s ETA 00:27
+[download]  14.8% of  191.95MiB at    8.64MiB/s ETA 00:18
+[download]  14.9% of  191.95MiB at    8.84MiB/s ETA 00:18
+[download]  15.4% of  191.95MiB at    4.10MiB/s ETA 00:39
+[download]  16.5% of  191.95MiB at   10.97MiB/s ETA 00:14
+[download]  18.5% of  191.95MiB at   14.79MiB/s ETA 00:10
+[download]  19.9% of  191.95MiB at   16.78MiB/s ETA 00:09
+[download]  20.4% of  191.95MiB at    1.58MiB/s ETA 01:36
+[download]  21.3% of  191.95MiB at    3.67MiB/s ETA 00:41
+[download]  22.9% of  191.95MiB at    7.09MiB/s ETA 00:20
+[download]  25.0% of  191.95MiB at    8.86MiB/s ETA 00:16
+[download]  25.0% of  191.95MiB at    8.88MiB/s ETA 00:16
+[download]  25.5% of  191.95MiB at    1.44MiB/s ETA 01:39
+[download]  26.3% of  191.95MiB at    3.18MiB/s ETA 00:44
+[download]  27.8% of  191.95MiB at    6.16MiB/s ETA 00:22
+[download]  29.9% of  191.95MiB at    8.69MiB/s ETA 00:15
+[download]  30.2% of  191.95MiB at    8.55MiB/s ETA 00:15
+[download]  30.7% of  191.95MiB at    1.39MiB/s ETA 01:35
+[download]  31.4% of  191.95MiB at    3.11MiB/s ETA 00:42
+[download]  32.9% of  191.95MiB at    5.97MiB/s ETA 00:21
+[download]  35.0% of  191.95MiB at    8.55MiB/s ETA 00:14
+[download]  35.2% of  191.95MiB at    9.01MiB/s ETA 00:13
+[download]  35.8% of  191.95MiB at   14.56MiB/s ETA 00:08
+[download]  36.8% of  191.95MiB at   38.74MiB/s ETA 00:03
+[download]  38.9% of  191.95MiB at   18.75MiB/s ETA 00:06
+[download]  40.4% of  191.95MiB at   20.69MiB/s ETA 00:05
+[download]  40.9% of  191.95MiB at    4.10MiB/s ETA 00:27
+[download]  41.9% of  191.95MiB at   10.76MiB/s ETA 00:10
+[download]  44.0% of  191.95MiB at   12.30MiB/s ETA 00:08
+[download]  45.3% of  191.95MiB at   16.49MiB/s ETA 00:06
+[download]  45.9% of  191.95MiB at    1.37MiB/s ETA 01:15
+[download]  46.6% of  191.95MiB at    3.03MiB/s ETA 00:33
+[download]  48.0% of  191.95MiB at    5.36MiB/s ETA 00:18
+[download]  50.1% of  191.95MiB at    7.82MiB/s ETA 00:12
+[download]  50.4% of  191.95MiB at    7.75MiB/s ETA 00:12
+[download]  50.9% of  191.95MiB at    5.73MiB/s ETA 00:16
+[download]  52.0% of  191.95MiB at   14.80MiB/s ETA 00:06
+[download]  54.1% of  191.95MiB at   17.30MiB/s ETA 00:05
+[download]  55.5% of  191.95MiB at   19.36MiB/s ETA 00:04
+[download]  56.0% of  191.95MiB at    4.13MiB/s ETA 00:20
+[download]  57.1% of  191.95MiB at   11.00MiB/s ETA 00:07
+[download]  59.2% of  191.95MiB at   12.23MiB/s ETA 00:06
+[download]  60.7% of  191.95MiB at   14.73MiB/s ETA 00:05
+[download]  61.2% of  191.95MiB at    4.03MiB/s ETA 00:18
+[download]  62.3% of  191.95MiB at   10.60MiB/s ETA 00:06
+[download]  64.4% of  191.95MiB at   12.21MiB/s ETA 00:05
+[download]  65.8% of  191.95MiB at   14.32MiB/s ETA 00:04
+[download]  66.3% of  191.95MiB at   13.85MiB/s ETA 00:04
+[download]  67.3% of  191.95MiB at   37.45MiB/s ETA 00:01
+[download]  69.4% of  191.95MiB at   18.77MiB/s ETA 00:03
+[download]  71.0% of  191.95MiB at   20.94MiB/s ETA 00:02
+[download]  71.5% of  191.95MiB at  421.11MiB/s ETA 00:00
+[download]  72.5% of  191.95MiB at   30.25MiB/s ETA 00:01
+[download]  74.6% of  191.95MiB at   23.13MiB/s ETA 00:02
+[download]  76.0% of  191.95MiB at   24.12MiB/s ETA 00:01
+[download]  76.5% of  191.95MiB at    3.98MiB/s ETA 00:11
+[download]  77.6% of  191.95MiB at   10.43MiB/s ETA 00:04
+[download]  79.6% of  191.95MiB at   12.11MiB/s ETA 00:03
+[download]  81.1% of  191.95MiB at   14.49MiB/s ETA 00:02
+[download]  81.7% of  191.95MiB at  577.41MiB/s ETA 00:00
+[download]  82.7% of  191.95MiB at  317.40MiB/s ETA 00:00
+[download]  84.8% of  191.95MiB at   22.99MiB/s ETA 00:01
+[download]  86.2% of  191.95MiB at   23.73MiB/s ETA 00:01
+[download]  86.7% of  191.95MiB at    1.37MiB/s ETA 00:18
+[download]  87.4% of  191.95MiB at    3.08MiB/s ETA 00:07
+[download]  88.8% of  191.95MiB at    5.83MiB/s ETA 00:03
+[download]  90.9% of  191.95MiB at    7.79MiB/s ETA 00:02
+[download]  91.1% of  191.95MiB at    8.11MiB/s ETA 00:02
+[download]  91.6% of  191.95MiB at    4.12MiB/s ETA 00:03
+[download]  92.7% of  191.95MiB at   11.02MiB/s ETA 00:01
+[download]  94.8% of  191.95MiB at   14.75MiB/s ETA 00:00
+[download]  96.3% of  191.95MiB at   14.83MiB/s ETA 00:00
+[download]  96.8% of  191.95MiB at   15.03MiB/s ETA 00:00
+[download]  97.9% of  191.95MiB at   39.68MiB/s ETA 00:00
+[download]  99.9% of  191.95MiB at   19.03MiB/s ETA 00:00
+[download] 100.0% of  191.95MiB at   19.24MiB/s ETA 00:00
+[download] 100% of  191.95MiB in 00:00:17 at 11.10MiB/s  
+                                                       
+TeraboxDL v1.8, Copyright (C) 2026 Damantha Jasinghe <https://github.com/Damantha126>
+Licensed under the terms of the MIT License, Massachusetts Institute of Technology (MIT)
+2026-01-02 09:33:20,888 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/editMessageText "HTTP/1.1 200 OK"
+Deprecated Feature: Support for Python version 3.9 has been deprecated. Please update to Python 3.10 or above
+Deprecated Feature: Passing cookies as a header is a potential security risk; they will be scoped to the domain of the downloaded urls. Please consider loading cookies from a file or browser instead.
+2026-01-02 09:33:24,913 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/getUpdates "HTTP/1.1 200 OK"
+2026-01-02 09:33:28,493 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/editMessageText "HTTP/1.1 200 OK"
+2026-01-02 09:33:30,793 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/editMessageText "HTTP/1.1 200 OK"
+2026-01-02 09:33:30,795 - __main__ - INFO - Uploading to Cloud Channel: -1003452174463
+2026-01-02 09:33:33,699 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/editMessageText "HTTP/1.1 200 OK"
+2026-01-02 09:33:34,936 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/getUpdates "HTTP/1.1 200 OK"
+2026-01-02 09:33:36,311 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/sendVideo "HTTP/1.1 200 OK"
+2026-01-02 09:33:36,448 - db - INFO - Added video to DB: 1EGN40lsLrX8d3tDOL6MPDw
+2026-01-02 09:33:36,681 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/sendMessage "HTTP/1.1 200 OK"
+2026-01-02 09:33:36,907 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/sendVideo "HTTP/1.1 200 OK"
+2026-01-02 09:33:36,910 - __main__ - INFO - Deleted file: downloads/1EGN40lsLrX8d3tDOL6MPDw.mp4
+2026-01-02 09:33:37,109 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8360513269:AAE1ndLWBPMKr6NxDhKeoE3-s0L0nHyMvfc/deleteMessage "HTTP/1.1 200 OK"

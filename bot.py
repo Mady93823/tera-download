@@ -377,7 +377,8 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     direct_url = video_info['url']
-    video_title = video_info['title']
+    # Escape title to prevent HTML parse errors
+    video_title = video_info['title'].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     thumbnail_url = video_info['thumbnail']
 
     # Update status with video details
@@ -399,11 +400,29 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     progress_hook = ProgressHook(context.bot, message.chat_id, status_msg.message_id)
 
     filename = None
+    thumb_path = None
     should_delete_immediately = True # Flag to control deletion
 
     try:
         # Run download in executor
         filename, info = await download_video(direct_url, output_template, progress_hook)
+        
+        # Extract metadata
+        width = info.get('width')
+        height = info.get('height')
+        duration = info.get('duration')
+        thumbnail_url = info.get('thumbnail')
+        
+        # Download thumbnail
+        if thumbnail_url:
+            try:
+                thumb_resp = requests.get(thumbnail_url)
+                if thumb_resp.status_code == 200:
+                    thumb_path = f"{filename}.jpg"
+                    with open(thumb_path, 'wb') as f:
+                        f.write(thumb_resp.content)
+            except Exception as e:
+                logger.error(f"Failed to download thumbnail: {e}")
             
         await context.bot.edit_message_text(chat_id=message.chat_id, message_id=status_msg.message_id, 
                                             text="✅ <b>Download Complete!</b>\n\n📤 Uploading to Telegram...", parse_mode='HTML')
@@ -474,19 +493,31 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
                     with ProgressFileReader(filename, upload_progress_callback) as video_file:
                         # Note: We pass the wrapper object as the video
                         # python-telegram-bot's input_file accepts read() method
-                        cloud_msg = await context.bot.send_video(
-                            chat_id=CLOUD_CHANNEL_ID,
-                            video=video_file, # This works because it has read()
-                            caption=(
-                                f"🆔 <code>{file_id}</code>\n"
-                                f"🎬: {video_title}\n\n"
-                                f"👤 <b>Requested by:</b> {user.mention_html()}\n"
-                                f"🆔 <b>User ID:</b> <code>{user.id}</code>"
-                            ),
-                            parse_mode='HTML',
-                            read_timeout=300, 
-                            write_timeout=300
-                        )
+                        
+                        thumb_file = open(thumb_path, 'rb') if thumb_path else None
+                        try:
+                            cloud_msg = await context.bot.send_video(
+                                chat_id=CLOUD_CHANNEL_ID,
+                                video=video_file, # This works because it has read()
+                                caption=(
+                                    f"🆔 <code>{file_id}</code>\n"
+                                    f"🎬: {video_title}\n\n"
+                                    f"👤 <b>Requested by:</b> {user.mention_html()}\n"
+                                    f"🆔 <b>User ID:</b> <code>{user.id}</code>"
+                                ),
+                                parse_mode='HTML',
+                                read_timeout=300, 
+                                write_timeout=300,
+                                width=width,
+                                height=height,
+                                duration=duration,
+                                supports_streaming=True,
+                                thumbnail=thumb_file
+                            )
+                        finally:
+                            if thumb_file:
+                                thumb_file.close()
+
                         if cloud_msg.video:
                             telegram_file_id = cloud_msg.video.file_id
                             sent_to_cloud = True
@@ -527,13 +558,23 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
                 # but if we failed above, we need a fresh reader.
                 try:
                     with ProgressFileReader(filename, upload_progress_callback) as video_file:
-                        user_msg = await message.reply_video(
-                            video=video_file, 
-                            caption=caption, 
-                            parse_mode='HTML',
-                            read_timeout=300,
-                            write_timeout=300
-                        )
+                        thumb_file = open(thumb_path, 'rb') if thumb_path else None
+                        try:
+                            user_msg = await message.reply_video(
+                                video=video_file, 
+                                caption=caption, 
+                                parse_mode='HTML',
+                                read_timeout=300,
+                                write_timeout=300,
+                                width=width,
+                                height=height,
+                                duration=duration,
+                                supports_streaming=True,
+                                thumbnail=thumb_file
+                            )
+                        finally:
+                            if thumb_file:
+                                thumb_file.close()
                         
                         # Opportunistic: If we uploaded to user, try to save that file_id to DB too?
                         if not sent_to_cloud and user_msg.video:
@@ -557,6 +598,13 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
             except Exception as e:
                 logger.error(f"Failed to delete file {filename}: {e}")
         
+        # Cleanup thumbnail
+        if thumb_path and os.path.exists(thumb_path):
+            try:
+                os.remove(thumb_path)
+            except Exception:
+                pass
+
         try:
             await context.bot.delete_message(chat_id=message.chat_id, message_id=status_msg.message_id)
         except:
