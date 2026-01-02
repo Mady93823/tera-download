@@ -42,7 +42,7 @@ if not TERABOX_COOKIE:
 db = Database()
 
 # Regex pattern for TeraBox links
-TERABOX_PATTERN = r"https?://(?:www\.)?(?:1024tera|terabox|teraboxapp|mirrobox|nephobox|freeterabox|4funbox|momerybox|tibibox|terasharelink)\.com/(?:s/|wap/share/filelist\?surl=)([a-zA-Z0-9_-]+)"
+TERABOX_PATTERN = r"https?://(?:www\.)?(?:1024tera|terabox|teraboxapp|teraboxshare|mirrobox|nephobox|freeterabox|4funbox|momerybox|tibibox|terasharelink)\.com/(?:s/|wap/share/filelist\?surl=)([a-zA-Z0-9_-]+)"
 
 app = Flask('')
 
@@ -363,11 +363,13 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     terabox_url = match.group(0) # Use the full matched URL
     file_id = match.group(1)
     
-    # Normalize ID for 'surl' links (usually need '1' prefix)
+    # Normalize ID for 'surl' links (usually need '1' prefix if missing)
     if "surl=" in terabox_url and not file_id.startswith("1"):
         file_id = "1" + file_id
-        # Reconstruct standard URL for consistency
-        terabox_url = f"https://terabox.com/s/{file_id}"
+        
+    # FORCE normalize to terabox.com to ensure downloader compatibility
+    # Many domains (teraboxshare, 1024tera, etc.) share the same ID structure
+    terabox_url = f"https://terabox.com/s/{file_id}"
     
     # Check if video exists in DB
     cached_video = db.get_video(file_id)
