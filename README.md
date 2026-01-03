@@ -11,6 +11,16 @@ A high-performance Telegram bot that downloads videos from various TeraBox domai
 - ☁️ **Cloud Channel**: Optionally uploads to a private channel for storage.
 - 📊 **Admin Dashboard**: View user stats and broadcast messages.
 
+## Admin Commands
+The following commands are available only to the admin (specified by `ADMIN_ID`):
+
+| Command | Usage | Description |
+| :--- | :--- | :--- |
+| `/users` | `/users` | Shows total number of bot users. |
+| `/broadcast` | `/broadcast <message>` | Sends a message to all users. |
+| `/del` | `/del <terabox_id>` | Deletes a video from the database cache. |
+| `/setcookie` | `/setcookie <ndus_value>` | Updates the TeraBox cookie instantly without restart. |
+
 ## Deployment on Koyeb
 
 1. **Fork/Clone this repository.**

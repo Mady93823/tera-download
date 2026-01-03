@@ -25,6 +25,9 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+# Suppress httpx logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 TOKEN = os.getenv('BOT_TOKEN')
@@ -42,6 +45,10 @@ if not TERABOX_COOKIE:
 
 # Initialize Database
 db = Database()
+
+# Concurrency Control
+MAX_CONCURRENT_DOWNLOADS = 2
+download_semaphore = asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS)
 
 # Regex pattern for TeraBox links
 TERABOX_PATTERN = r"https?://(?:www\.)?(?:1024tera|terabox|teraboxapp|teraboxshare|mirrobox|nephobox|freeterabox|4funbox|momerybox|tibibox|terasharelink)\.com/(?:s/|wap/share/filelist\?surl=)([a-zA-Z0-9_-]+)"
@@ -376,6 +383,25 @@ async def admin_delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     else:
         await update.message.reply_text(f"❌ <b>Not Found:</b> <code>{terabox_id}</code> in database.", parse_mode='HTML')
 
+async def admin_set_cookie(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Dynamically update the TeraBox cookie."""
+    user = update.effective_user
+    if user.id != ADMIN_ID:
+        return
+
+    message = update.message.text.split(' ', 1)
+    if len(message) < 2:
+        await update.message.reply_text("⚠️ <b>Usage:</b> /setcookie <new_cookie_value>", parse_mode='HTML')
+        return
+
+    new_cookie = message[1].strip()
+    
+    # Update global variable
+    global TERABOX_COOKIE
+    TERABOX_COOKIE = new_cookie
+    
+    await update.message.reply_text("✅ <b>Cookie Updated!</b>\n\nNote: This change is temporary and will reset on restart unless you update .env file.", parse_mode='HTML')
+
 async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.message
     text = message.text
@@ -448,228 +474,260 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     await context.bot.edit_message_text(chat_id=message.chat_id, message_id=status_msg.message_id, 
                                         text=info_text, parse_mode='HTML')
 
-    # Download with yt-dlp
-    output_template = f"downloads/{file_id}.%(ext)s"
-    
-    # Initialize Progress Hook
-    progress_hook = ProgressHook(context.bot, message.chat_id, status_msg.message_id)
+    # Check for concurrency limit
+    if download_semaphore.locked():
+        await context.bot.edit_message_text(
+            chat_id=message.chat_id, 
+            message_id=status_msg.message_id,
+            text=f"{info_text}\n\n⏳ <b>Queue is full.</b> Waiting for a slot...",
+            parse_mode='HTML'
+        )
 
-    filename = None
-    thumb_path = None
-    should_delete_immediately = True # Flag to control deletion
+    async with download_semaphore:
+        # Update status once slot is acquired
+        await context.bot.edit_message_text(
+            chat_id=message.chat_id,
+            message_id=status_msg.message_id,
+            text=f"{info_text}\n\n⬇️ <b>Starting download...</b>",
+            parse_mode='HTML'
+        )
 
-    try:
-        # Run download in executor
-        filename, info = await download_video(direct_url, output_template, progress_hook)
+        # Download with yt-dlp
+        output_template = f"downloads/{file_id}.%(ext)s"
         
-        # Extract metadata
-        width = info.get('width')
-        height = info.get('height')
-        duration = info.get('duration')
-        thumbnail_url = info.get('thumbnail')
-        
-        # Download thumbnail
-        if thumbnail_url:
-            try:
-                thumb_resp = requests.get(thumbnail_url)
-                if thumb_resp.status_code == 200:
-                    thumb_path = f"{filename}.jpg"
-                    with open(thumb_path, 'wb') as f:
-                        f.write(thumb_resp.content)
-            except Exception as e:
-                logger.error(f"Failed to download thumbnail: {e}")
-            
-        await context.bot.edit_message_text(chat_id=message.chat_id, message_id=status_msg.message_id, 
-                                            text="✅ <b>Download Complete!</b>\n\n📤 Uploading to Telegram...", parse_mode='HTML')
-        
-        # Check file size (Telegram bot limit 50MB)
-        file_size = os.path.getsize(filename)
-        if file_size > 50 * 1024 * 1024:
-            # Construct Stream Link
-            file_basename = os.path.basename(filename)
-            stream_link = f"{BASE_URL}/watch/{file_basename}"
-            
-            await message.reply_text(
-                f"⚠️ <b>File too large for Telegram!</b> ({file_size/1024/1024:.2f} MB)\n\n"
-                f"🔗 <b>Stream/Download Link:</b>\n{stream_link}\n\n"
-                f"<i>Link expires in 30 minutes.</i>",
-                parse_mode='HTML'
-            )
-            
-            should_delete_immediately = False
-            
-            # Schedule deletion
-            async def delete_later(f_path, delay):
-                await asyncio.sleep(delay)
-                try:
-                    if os.path.exists(f_path):
-                        os.remove(f_path)
-                        logger.info(f"Deleted expired file: {f_path}")
-                except Exception as e:
-                    logger.error(f"Error deleting expired file {f_path}: {e}")
+        # Initialize Progress Hook
+        progress_hook = ProgressHook(context.bot, message.chat_id, status_msg.message_id)
 
-            # Run deletion task in background (30 mins = 1800 sec)
-            asyncio.create_task(delete_later(filename, 1800))
-            
-        else:
-            caption = f"🎬 <b>{video_title}</b>"
-            
-            # Helper to update upload progress
-            def upload_progress_callback(current, total):
-                try:
-                    percent = (current / total) * 100
-                    bar = get_progress_bar(percent)
-                    text = (
-                        f"📤 <b>Uploading Video...</b>\n\n"
-                        f"<b>Progress:</b> {bar} {percent:.1f}%\n"
-                    )
-                    # We need to run this in the event loop
-                    asyncio.run_coroutine_threadsafe(
-                        context.bot.edit_message_text(
-                            chat_id=message.chat_id,
-                            message_id=status_msg.message_id,
-                            text=text,
-                            parse_mode='HTML'
-                        ),
-                        asyncio.get_running_loop()
-                    )
-                except Exception:
-                    pass # Ignore errors during UI update
-
-            # 1. Send to Cloud Channel (if configured)
-            sent_to_cloud = False
-            telegram_file_id = None
-            
-            if CLOUD_CHANNEL_ID:
-                try:
-                    logger.info(f"Uploading to Cloud Channel: {CLOUD_CHANNEL_ID}")
-                    
-                    # Use ProgressFileReader
-                    with ProgressFileReader(filename, upload_progress_callback) as video_file:
-                        # Note: We pass the wrapper object as the video
-                        # python-telegram-bot's input_file accepts read() method
-                        
-                        thumb_file = open(thumb_path, 'rb') if thumb_path else None
-                        try:
-                            cloud_msg = await context.bot.send_video(
-                                chat_id=CLOUD_CHANNEL_ID,
-                                video=video_file, # This works because it has read()
-                                caption=(
-                                    f"🆔 <code>{file_id}</code>\n"
-                                    f"🎬: {video_title}\n\n"
-                                    f"👤 <b>Requested by:</b> {user.mention_html()}\n"
-                                    f"🆔 <b>User ID:</b> <code>{user.id}</code>"
-                                ),
-                                parse_mode='HTML',
-                                read_timeout=300, 
-                                write_timeout=300,
-                                width=width,
-                                height=height,
-                                duration=duration,
-                                supports_streaming=True,
-                                thumbnail=thumb_file
-                            )
-                        finally:
-                            if thumb_file:
-                                thumb_file.close()
-
-                        if cloud_msg.video:
-                            telegram_file_id = cloud_msg.video.file_id
-                            sent_to_cloud = True
-                            
-                            # Save to DB
-                            db.add_video(file_id, telegram_file_id, video_title)
-                except Exception as e:
-                    logger.error(f"Failed to upload to Cloud Channel: {e}")
-
-            # Send log to LOG_CHANNEL_ID
-            if LOG_CHANNEL_ID and telegram_file_id:
-                try:
-                    await context.bot.send_message(
-                        chat_id=LOG_CHANNEL_ID,
-                        text=(
-                            f"📝 <b>New Video Processed!</b>\n\n"
-                            f"🎬 <b>Title:</b> {video_title}\n"
-                            f"🆔 <b>TeraBox ID:</b> <code>{file_id}</code>\n"
-                            f"👤 <b>User:</b> {user.mention_html()} (<code>{user.id}</code>)\n"
-                            f"💾 <b>File ID:</b> <code>{telegram_file_id}</code>"
-                        ),
-                        parse_mode='HTML'
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to send log to LOG_CHANNEL: {e}")
-
-            # 2. Send to User
-            if sent_to_cloud and telegram_file_id:
-                # Forward/Send using file_id (Fast!)
-                await message.reply_video(
-                    video=telegram_file_id,
-                    caption=caption,
-                    parse_mode='HTML'
-                )
-            else:
-                # Upload directly to user (if cloud failed or not configured)
-                # We reuse the ProgressFileReader if we haven't uploaded yet, 
-                # but if we failed above, we need a fresh reader.
-                try:
-                    with ProgressFileReader(filename, upload_progress_callback) as video_file:
-                        thumb_file = open(thumb_path, 'rb') if thumb_path else None
-                        try:
-                            user_msg = await message.reply_video(
-                                video=video_file, 
-                                caption=caption, 
-                                parse_mode='HTML',
-                                read_timeout=300,
-                                write_timeout=300,
-                                width=width,
-                                height=height,
-                                duration=duration,
-                                supports_streaming=True,
-                                thumbnail=thumb_file
-                            )
-                        finally:
-                            if thumb_file:
-                                thumb_file.close()
-                        
-                        # Opportunistic: If we uploaded to user, try to save that file_id to DB too?
-                        if not sent_to_cloud and user_msg.video:
-                            db.add_video(file_id, user_msg.video.file_id, video_title)
-                except Exception as e:
-                     logger.error(f"Failed to upload to user: {e}")
-                     await message.reply_text("❌ Failed to upload video.")
-
-        
-        # Cleanup is handled in finally block
-
-    except Exception as e:
-        logger.error(f"Error processing video: {e}")
-        await message.reply_text(f"❌ <b>Error processing video:</b> {str(e)}", parse_mode='HTML')
-    finally:
-        # Cleanup
-        if should_delete_immediately and filename and os.path.exists(filename):
-            try:
-                os.remove(filename)
-                logger.info(f"Deleted file: {filename}")
-            except Exception as e:
-                logger.error(f"Failed to delete file {filename}: {e}")
-        
-        # Cleanup thumbnail
-        if thumb_path and os.path.exists(thumb_path):
-            try:
-                os.remove(thumb_path)
-            except Exception:
-                pass
+        filename = None
+        thumb_path = None
+        should_delete_immediately = True # Flag to control deletion
 
         try:
-            await context.bot.delete_message(chat_id=message.chat_id, message_id=status_msg.message_id)
-        except:
-            pass
+            # Run download in executor
+            filename, info = await download_video(direct_url, output_template, progress_hook)
+            
+            # Extract metadata
+            width = info.get('width')
+            height = info.get('height')
+            duration = info.get('duration')
+            thumbnail_url = info.get('thumbnail')
+            
+            # Download thumbnail
+            if thumbnail_url:
+                try:
+                    thumb_resp = requests.get(thumbnail_url)
+                    if thumb_resp.status_code == 200:
+                        thumb_path = f"{filename}.jpg"
+                        with open(thumb_path, 'wb') as f:
+                            f.write(thumb_resp.content)
+                except Exception as e:
+                    logger.error(f"Failed to download thumbnail: {e}")
+                
+            await context.bot.edit_message_text(chat_id=message.chat_id, message_id=status_msg.message_id, 
+                                                text="✅ <b>Download Complete!</b>\n\n📤 Uploading to Telegram...", parse_mode='HTML')
+            
+            # Check file size (Telegram bot limit 50MB)
+            file_size = os.path.getsize(filename)
+            if file_size > 50 * 1024 * 1024:
+                # Construct Stream Link
+                file_basename = os.path.basename(filename)
+                stream_link = f"{BASE_URL}/watch/{file_basename}"
+                
+                await message.reply_text(
+                    f"⚠️ <b>File too large for Telegram!</b> ({file_size/1024/1024:.2f} MB)\n\n"
+                    f"🔗 <b>Stream/Download Link:</b>\n{stream_link}\n\n"
+                    f"<i>Link expires in 30 minutes.</i>",
+                    parse_mode='HTML'
+                )
+                
+                should_delete_immediately = False
+                
+                # Schedule deletion
+                async def delete_later(f_path, delay):
+                    await asyncio.sleep(delay)
+                    try:
+                        if os.path.exists(f_path):
+                            os.remove(f_path)
+                            logger.info(f"Deleted expired file: {f_path}")
+                    except Exception as e:
+                        logger.error(f"Error deleting expired file {f_path}: {e}")
+
+                # Run deletion task in background (30 mins = 1800 sec)
+                asyncio.create_task(delete_later(filename, 1800))
+                
+            else:
+                caption = f"🎬 <b>{video_title}</b>"
+                
+                # Helper to update upload progress
+                def upload_progress_callback(current, total):
+                    try:
+                        percent = (current / total) * 100
+                        bar = get_progress_bar(percent)
+                        text = (
+                            f"📤 <b>Uploading Video...</b>\n\n"
+                            f"<b>Progress:</b> {bar} {percent:.1f}%\n"
+                        )
+                        # We need to run this in the event loop
+                        asyncio.run_coroutine_threadsafe(
+                            context.bot.edit_message_text(
+                                chat_id=message.chat_id,
+                                message_id=status_msg.message_id,
+                                text=text,
+                                parse_mode='HTML'
+                            ),
+                            asyncio.get_running_loop()
+                        )
+                    except Exception:
+                        pass # Ignore errors during UI update
+
+                # 1. Send to Cloud Channel (if configured)
+                sent_to_cloud = False
+                telegram_file_id = None
+                
+                if CLOUD_CHANNEL_ID:
+                    try:
+                        logger.info(f"Uploading to Cloud Channel: {CLOUD_CHANNEL_ID}")
+                        
+                        # Use ProgressFileReader
+                        with ProgressFileReader(filename, upload_progress_callback) as video_file:
+                            # Note: We pass the wrapper object as the video
+                            # python-telegram-bot's input_file accepts read() method
+                            
+                            thumb_file = open(thumb_path, 'rb') if thumb_path else None
+                            try:
+                                cloud_msg = await context.bot.send_video(
+                                    chat_id=CLOUD_CHANNEL_ID,
+                                    video=video_file, # This works because it has read()
+                                    caption=(
+                                        f"🆔 <code>{file_id}</code>\n"
+                                        f"🎬: {video_title}\n\n"
+                                        f"👤 <b>Requested by:</b> {user.mention_html()}\n"
+                                        f"🆔 <b>User ID:</b> <code>{user.id}</code>"
+                                    ),
+                                    parse_mode='HTML',
+                                    read_timeout=300, 
+                                    write_timeout=300,
+                                    width=width,
+                                    height=height,
+                                    duration=duration,
+                                    supports_streaming=True,
+                                    thumbnail=thumb_file
+                                )
+                            finally:
+                                if thumb_file:
+                                    thumb_file.close()
+
+                            if cloud_msg.video:
+                                telegram_file_id = cloud_msg.video.file_id
+                                sent_to_cloud = True
+                                
+                                # Save to DB
+                                db.add_video(file_id, telegram_file_id, video_title)
+                    except Exception as e:
+                        logger.error(f"Failed to upload to Cloud Channel: {e}")
+
+                # Send log to LOG_CHANNEL_ID
+                if LOG_CHANNEL_ID and telegram_file_id:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=LOG_CHANNEL_ID,
+                            text=(
+                                f"📝 <b>New Video Processed!</b>\n\n"
+                                f"🎬 <b>Title:</b> {video_title}\n"
+                                f"🆔 <b>TeraBox ID:</b> <code>{file_id}</code>\n"
+                                f"👤 <b>User:</b> {user.mention_html()} (<code>{user.id}</code>)\n"
+                                f"💾 <b>File ID:</b> <code>{telegram_file_id}</code>"
+                            ),
+                            parse_mode='HTML'
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to send log to LOG_CHANNEL: {e}")
+
+                # 2. Send to User
+                if sent_to_cloud and telegram_file_id:
+                    # Forward/Send using file_id (Fast!)
+                    await message.reply_video(
+                        video=telegram_file_id,
+                        caption=caption,
+                        parse_mode='HTML'
+                    )
+                else:
+                    # Upload directly to user (if cloud failed or not configured)
+                    # We reuse the ProgressFileReader if we haven't uploaded yet, 
+                    # but if we failed above, we need a fresh reader.
+                    try:
+                        with ProgressFileReader(filename, upload_progress_callback) as video_file:
+                            thumb_file = open(thumb_path, 'rb') if thumb_path else None
+                            try:
+                                user_msg = await message.reply_video(
+                                    video=video_file, 
+                                    caption=caption, 
+                                    parse_mode='HTML',
+                                    read_timeout=300,
+                                    write_timeout=300,
+                                    width=width,
+                                    height=height,
+                                    duration=duration,
+                                    supports_streaming=True,
+                                    thumbnail=thumb_file
+                                )
+                            finally:
+                                if thumb_file:
+                                    thumb_file.close()
+                            
+                            # Opportunistic: If we uploaded to user, try to save that file_id to DB too?
+                            if not sent_to_cloud and user_msg.video:
+                                db.add_video(file_id, user_msg.video.file_id, video_title)
+                    except Exception as e:
+                        logger.error(f"Failed to upload to user: {e}")
+                        await message.reply_text("❌ Failed to upload video.")
+
+            
+            # Cleanup is handled in finally block
+
+        except Exception as e:
+            logger.error(f"Error processing video: {e}")
+            await message.reply_text(f"❌ <b>Error processing video:</b> {str(e)}", parse_mode='HTML')
+        finally:
+            # Cleanup
+            if should_delete_immediately and filename and os.path.exists(filename):
+                try:
+                    os.remove(filename)
+                    logger.info(f"Deleted file: {filename}")
+                except Exception as e:
+                    logger.error(f"Failed to delete file {filename}: {e}")
+            
+            # Cleanup thumbnail
+            if thumb_path and os.path.exists(thumb_path):
+                try:
+                    os.remove(thumb_path)
+                except Exception:
+                    pass
+
+            try:
+                await context.bot.delete_message(chat_id=message.chat_id, message_id=status_msg.message_id)
+            except:
+                pass
+
+def clean_downloads():
+    """Clean the downloads directory on startup."""
+    if os.path.exists("downloads"):
+        try:
+            import shutil
+            shutil.rmtree("downloads")
+            os.makedirs("downloads")
+            logger.info("Cleaned downloads directory.")
+        except Exception as e:
+            logger.error(f"Failed to clean downloads directory: {e}")
 
 def main() -> None:
     """Start the bot."""
     if not TOKEN:
         print("Error: BOT_TOKEN not set.")
         return
+
+    # Clean downloads on startup
+    clean_downloads()
 
     # Create the Application and pass it your bot's token.
     # Increase timeouts for large file uploads
@@ -689,6 +747,7 @@ def main() -> None:
     application.add_handler(CommandHandler("users", admin_users))
     application.add_handler(CommandHandler("broadcast", admin_broadcast))
     application.add_handler(CommandHandler("del", admin_delete))
+    application.add_handler(CommandHandler("setcookie", admin_set_cookie))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_terabox_link))
 
     # Run the bot
