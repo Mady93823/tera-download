@@ -36,6 +36,7 @@ LOG_CHANNEL_ID = os.getenv('LOG_CHANNEL_ID')
 ADMIN_ID = int(os.getenv('ADMIN_ID', 0))
 TERABOX_COOKIE = os.getenv('TERABOX_COOKIE')
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
+ENABLE_WEB_SERVER = os.getenv('ENABLE_WEB_SERVER', 'true').lower() == 'true'
 
 if not CLOUD_CHANNEL_ID:
     logger.warning("⚠️ CLOUD_CHANNEL_ID is not set in .env! Videos will NOT be uploaded to a channel.")
@@ -165,6 +166,39 @@ class ProgressHook:
                         self.loop
                     )
 
+def transcode_to_target_size(input_path, target_mb, duration, width=None, height=None):
+    try:
+        target_bits = int(target_mb * 1024 * 1024 * 8)
+        if not duration or duration <= 0:
+            duration = 600
+        total_bitrate = max(int(target_bits / duration), 300000)
+        audio_bitrate = 96000
+        video_bitrate = max(total_bitrate - audio_bitrate, 200000)
+        output_path = os.path.splitext(input_path)[0] + ".compressed.mp4"
+        vf = None
+        if width and height:
+            vf = "scale='min(1280,iw)':min(720,ih):force_original_aspect_ratio=decrease"
+        cmd = [
+            'ffmpeg', '-y', '-i', input_path,
+            '-c:v', 'libx264', '-preset', 'veryfast',
+            '-b:v', str(video_bitrate), '-maxrate', str(video_bitrate), '-bufsize', str(video_bitrate * 2),
+            '-c:a', 'aac', '-b:a', str(audio_bitrate),
+            '-movflags', '+faststart'
+        ]
+        if vf:
+            cmd.extend(['-vf', vf])
+        cmd.append(output_path)
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode == 0 and os.path.exists(output_path):
+            return output_path
+        else:
+            try:
+                logger.error(result.stderr.decode())
+            except Exception:
+                pass
+    except Exception as e:
+        logger.error(f"Transcode error: {e}")
+    return None
 def get_video_info(terabox_url):
     """
     Extracts the video info (url, title, thumbnail) using terabox-downloader.
@@ -526,34 +560,39 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
             await context.bot.edit_message_text(chat_id=message.chat_id, message_id=status_msg.message_id, 
                                                 text="✅ <b>Download Complete!</b>\n\n📤 Uploading to Telegram...", parse_mode='HTML')
             
-            # Check file size (Telegram bot limit 50MB)
             file_size = os.path.getsize(filename)
             if file_size > 50 * 1024 * 1024:
-                # Construct Stream Link
-                file_basename = os.path.basename(filename)
-                stream_link = f"{BASE_URL}/watch/{file_basename}"
-                
-                await message.reply_text(
-                    f"⚠️ <b>File too large for Telegram!</b> ({file_size/1024/1024:.2f} MB)\n\n"
-                    f"🔗 <b>Stream/Download Link:</b>\n{stream_link}\n\n"
-                    f"<i>Link expires in 30 minutes.</i>",
-                    parse_mode='HTML'
-                )
-                
-                should_delete_immediately = False
-                
-                # Schedule deletion
-                async def delete_later(f_path, delay):
-                    await asyncio.sleep(delay)
-                    try:
-                        if os.path.exists(f_path):
-                            os.remove(f_path)
-                            logger.info(f"Deleted expired file: {f_path}")
-                    except Exception as e:
-                        logger.error(f"Error deleting expired file {f_path}: {e}")
-
-                # Run deletion task in background (30 mins = 1800 sec)
-                asyncio.create_task(delete_later(filename, 1800))
+                if ENABLE_WEB_SERVER:
+                    file_basename = os.path.basename(filename)
+                    stream_link = f"{BASE_URL}/watch/{file_basename}"
+                    await message.reply_text(
+                        f"⚠️ <b>File too large for Telegram!</b> ({file_size/1024/1024:.2f} MB)\n\n"
+                        f"🔗 <b>Stream/Download Link:</b>\n{stream_link}\n\n"
+                        f"<i>Link expires in 30 minutes.</i>",
+                        parse_mode='HTML'
+                    )
+                    should_delete_immediately = False
+                    async def delete_later(f_path, delay):
+                        await asyncio.sleep(delay)
+                        try:
+                            if os.path.exists(f_path):
+                                os.remove(f_path)
+                                logger.info(f"Deleted expired file: {f_path}")
+                        except Exception as e:
+                            logger.error(f"Error deleting expired file {f_path}: {e}")
+                    asyncio.create_task(delete_later(filename, 1800))
+                    return
+                else:
+                    new_file = transcode_to_target_size(filename, 49, duration, width, height)
+                    if new_file and os.path.getsize(new_file) <= 50 * 1024 * 1024:
+                        filename = new_file
+                    else:
+                        await message.reply_text(
+                            f"❌ <b>File too large to upload.</b>\n"
+                            f"<i>Transcoding failed or file still exceeds limit.</i>",
+                            parse_mode='HTML'
+                        )
+                        return
                 
             else:
                 caption = f"🎬 <b>{video_title}</b>"
@@ -752,7 +791,8 @@ def main() -> None:
 
     # Run the bot
     print("Bot is running...")
-    keep_alive()
+    if ENABLE_WEB_SERVER:
+        keep_alive()
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
