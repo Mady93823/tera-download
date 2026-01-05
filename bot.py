@@ -504,7 +504,14 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
         match = re.search(fallback_pattern, text, re.IGNORECASE)
         
     if not match:
-        await message.reply_text("❌ <b>Invalid Link</b>\nPlease send a valid TeraBox link.", parse_mode='HTML')
+        # Debugging: Print what was received
+        logger.info(f"Failed to match link in text: {text!r}")
+        await message.reply_text(
+            f"❌ <b>Invalid Link (v2.1)</b>\n"
+            f"I could not detect a valid TeraBox link in your message.\n"
+            f"<b>Received:</b> <code>{text[:100]}</code>", 
+            parse_mode='HTML'
+        )
         return
 
     terabox_url = match.group(0) # Use the full matched URL
