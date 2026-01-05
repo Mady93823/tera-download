@@ -9,8 +9,6 @@ import tempfile
 import base64
 import json
 from http.cookies import SimpleCookie
-from flask import Flask, send_from_directory
-from threading import Thread
 import yt_dlp
 import requests
 from dotenv import load_dotenv
@@ -38,7 +36,6 @@ LOG_CHANNEL_ID = os.getenv('LOG_CHANNEL_ID')
 ADMIN_ID = int(os.getenv('ADMIN_ID', 0))
 TERABOX_COOKIE = os.getenv('TERABOX_COOKIE')
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
-ENABLE_WEB_SERVER = os.getenv('ENABLE_WEB_SERVER', 'true').lower() == 'true'
 TELEGRAM_API_URL = os.getenv('TELEGRAM_API_URL') # Optional: Custom Bot API URL
 HTTP_PROXY = os.getenv('HTTP_PROXY')
 HTTPS_PROXY = os.getenv('HTTPS_PROXY')
@@ -64,66 +61,6 @@ download_semaphore = asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS)
 
 # Regex pattern for TeraBox links
 TERABOX_PATTERN = r"https?://(?:www\.)?(?:1024tera|1024terabox|terabox|teraboxapp|teraboxshare|mirrobox|nephobox|freeterabox|4funbox|momerybox|tibibox|terasharelink)\.com/(?:s/|.*?surl=)([a-zA-Z0-9_-]+)"
-
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "I am alive"
-
-@app.route('/watch/<path:filename>')
-def stream_video(filename):
-    # Enable Range requests for streaming
-    return send_from_directory('downloads', filename)
-
-@app.route('/player')
-def video_player():
-    from flask import request
-    file_id = request.args.get('id')
-    if not file_id:
-        return "Missing file ID", 400
-        
-    # Generate proxy URL
-    video_url = get_proxy_url(file_id)
-    
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Video Player</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            body {{ margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; }}
-            video {{ width: 100%; max-width: 800px; height: auto; }}
-        </style>
-        <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    </head>
-    <body>
-        <video id="video" controls autoplay playsinline></video>
-        <script>
-            var video = document.getElementById('video');
-            var videoSrc = "{video_url}";
-            
-            if (Hls.isSupported()) {{
-                var hls = new Hls();
-                hls.loadSource(videoSrc);
-                hls.attachMedia(video);
-            }}
-            else if (video.canPlayType('application/vnd.apple.mpegurl')) {{
-                video.src = videoSrc;
-            }}
-        </script>
-    </body>
-    </html>
-    """
-    return html
-
-def run():
-    app.run(host='0.0.0.0', port=8000)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
 
 # Helper for progress bar
 def get_progress_bar(percentage, length=15):
@@ -777,17 +714,21 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     # If using proxy (assumed large/streamable) OR size > 50MB
     if video_info.get('is_proxy') or video_info.get('size', 0) > STREAM_THRESHOLD:
         
-        # Prepare Web App URL
-        # We need an HTTPS URL. 
-        # If BASE_URL is not https, Telegram WebApp might fail on mobile but work on desktop?
-        # Ideally user should have HTTPS.
-        player_url = f"{BASE_URL}/player?id={file_id}"
+        # Get stream URL
+        stream_url = video_info.get('url')
+        if not stream_url and video_info.get('is_proxy'):
+             stream_url = get_proxy_url(file_id)
+             
+        # Use a public HLS player for WebApp
+        # We encode the stream URL to pass it as a parameter
+        encoded_stream_url = urllib.parse.quote(stream_url)
+        # Using hlsjs.video-dev.org demo player which is reliable and public
+        player_url = f"https://hlsjs.video-dev.org/demo/?src={encoded_stream_url}"
         
         # Create Play Button
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("▶️ Play Video", web_app=WebAppInfo(url=player_url))],
-            # Add a fallback link button just in case
-            # [InlineKeyboardButton("🔗 Direct Link", url=direct_url)] 
+            [InlineKeyboardButton("🔗 Direct Link", url=stream_url)]
         ])
         
         # Update text to indicate streaming
@@ -870,37 +811,11 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
             upload_limit = 2000 * 1024 * 1024 if TELEGRAM_API_URL else 50 * 1024 * 1024
             
             if file_size > upload_limit:
-                if ENABLE_WEB_SERVER:
-                    file_basename = os.path.basename(filename)
-                    stream_link = f"{BASE_URL}/watch/{file_basename}"
-                    await message.reply_text(
-                        f"⚠️ <b>File too large for Telegram!</b> ({file_size/1024/1024:.2f} MB)\n\n"
-                        f"🔗 <b>Stream/Download Link:</b>\n{stream_link}\n\n"
-                        f"<i>Link expires in 30 minutes.</i>",
-                        parse_mode='HTML'
-                    )
-                    should_delete_immediately = False
-                    
-                    # Schedule deletion
-                    async def delete_later(f_path, delay):
-                        await asyncio.sleep(delay)
-                        try:
-                            if os.path.exists(f_path):
-                                os.remove(f_path)
-                                logger.info(f"Deleted expired file: {f_path}")
-                        except Exception as e:
-                            logger.error(f"Error deleting expired file {f_path}: {e}")
-
-                    # Run deletion task in background (30 mins = 1800 sec)
-                    asyncio.create_task(delete_later(filename, 1800))
-                else:
-                    # Fallback if server disabled: Try to transcode?
-                    # But 2GB is too big to transcode quickly.
-                    await message.reply_text(
-                        f"⚠️ <b>File too large ({file_size/1024/1024:.2f} MB)</b> and Web Server is disabled.\n"
-                        f"Cannot send file.",
-                        parse_mode='HTML'
-                    )
+                await message.reply_text(
+                    f"⚠️ <b>File too large for Telegram!</b> ({file_size/1024/1024:.2f} MB)\n\n"
+                    f"🔗 <b>Direct Download Link:</b>\n{direct_url}\n\n",
+                    parse_mode='HTML'
+                )
                     
             else:
                 caption = f"🎬 <b>{video_title}</b>"
@@ -1106,8 +1021,6 @@ def main() -> None:
 
     # Run the bot
     print("Bot is running...")
-    if ENABLE_WEB_SERVER:
-        keep_alive()
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
