@@ -594,8 +594,28 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     video_info = get_video_info_multi(file_id, terabox_url)
     
     if not video_info or not video_info['url']:
-        await context.bot.edit_message_text(chat_id=message.chat_id, message_id=status_msg.message_id, 
-                                            text="❌ <b>Error:</b> Failed to extract video.\nThe link might be invalid or expired.", parse_mode='HTML')
+        # If the original URL looks like a folder/multi-file share, inform the user
+        if ("sharing/link" in terabox_url) or ("filelist" in terabox_url):
+            await context.bot.edit_message_text(
+                chat_id=message.chat_id,
+                message_id=status_msg.message_id,
+                text=(
+                    "📁 <b>Folder Link Detected</b>\n\n"
+                    "This share appears to contain multiple files. Please send a <b>direct file link</b> from inside the folder:\n\n"
+                    "• Open the folder link in your browser/app\n"
+                    "• Tap the file you want\n"
+                    "• Copy its share link (it should end with <code>/s/...</code>)\n\n"
+                    "Then paste that file link here."
+                ),
+                parse_mode='HTML'
+            )
+        else:
+            await context.bot.edit_message_text(
+                chat_id=message.chat_id,
+                message_id=status_msg.message_id,
+                text="❌ <b>Error:</b> Failed to extract video.\nThe link might be invalid or expired.",
+                parse_mode='HTML'
+            )
         return
 
     direct_url = video_info['url']
