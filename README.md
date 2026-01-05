@@ -44,6 +44,8 @@ The following commands are available only to the admin (specified by `ADMIN_ID`)
    | `LOG_CHANNEL_ID` | (Optional) Channel ID for logs. |
    | `TERABOX_COOKIE` | **Required**. Your `ndus` cookie from TeraBox. |
    | `BASE_URL` | **Required**. Your Koyeb App Public URL (e.g., `https://my-app.koyeb.app`). |
+   | `ENABLE_WEB_SERVER` | (Optional) Set to `false` if deploying on VPS without public ports (default: `true`). |
+   | `TELEGRAM_API_URL` | (Optional) Custom Bot API URL for large uploads (up to 2GB). E.g., `http://localhost:8081/bot`. |
 
    > **How to get TERABOX_COOKIE**:
    > 1. Login to TeraBox on your browser.
@@ -54,6 +56,27 @@ The following commands are available only to the admin (specified by `ADMIN_ID`)
    - Click **Deploy**.
    - Wait for the build to finish.
    - Once "Healthy", your bot is ready!
+
+## Handling Large Files (Up to 2GB)
+Telegram's default bot API limit is **50MB**. To upload files up to **2GB**, you must use a **Local Telegram Bot API Server**.
+
+1. **Install Telegram Bot API Server**:
+   Follow instructions [here](https://github.com/tdlib/telegram-bot-api).
+   
+   Example (Docker):
+   ```bash
+   docker run -d -p 8081:8081 --name=telegram-bot-api \
+       -e TELEGRAM_API_ID=<your_api_id> \
+       -e TELEGRAM_API_HASH=<your_api_hash> \
+       aiogram/telegram-bot-api:latest
+   ```
+
+2. **Configure Environment Variable**:
+   Set `TELEGRAM_API_URL` in your `.env` file:
+   ```env
+   TELEGRAM_API_URL=http://localhost:8081/bot
+   ```
+   *(Replace localhost with your server IP if running separately)*
 
 ## Local Development
 
@@ -78,6 +101,15 @@ The following commands are available only to the admin (specified by `ADMIN_ID`)
 ## Requirements
 - Python 3.9+
 - FFmpeg (installed on the system)
+- Aria2c (recommended for faster downloads)
+
+## VPS Limitations (LXC/No Public Ports)
+If you are running this bot on a **LXC VPS** or a server **without public ports** (e.g., NAT VPS):
+1. **Set `ENABLE_WEB_SERVER=false`** in your `.env` file. This prevents the bot from crashing due to port binding errors.
+2. **Stream Links will NOT work** because they require a public IP/Port.
+3. **Large Files (>50MB)**:
+   - If `TELEGRAM_API_URL` is configured (requires local API server), files up to 2GB will upload directly.
+   - If NOT configured, the bot will attempt to **transcode** (compress) the video to <50MB. This is CPU intensive and may fail for very large files.
 
 ## License
 MIT

@@ -12,8 +12,8 @@ from threading import Thread
 import yt_dlp
 import requests
 from dotenv import load_dotenv
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from db import Database
 from TeraboxDL import TeraboxDL
 
@@ -37,6 +37,7 @@ ADMIN_ID = int(os.getenv('ADMIN_ID', 0))
 TERABOX_COOKIE = os.getenv('TERABOX_COOKIE')
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
 ENABLE_WEB_SERVER = os.getenv('ENABLE_WEB_SERVER', 'true').lower() == 'true'
+TELEGRAM_API_URL = os.getenv('TELEGRAM_API_URL') # Optional: Custom Bot API URL
 
 if not CLOUD_CHANNEL_ID:
     logger.warning("⚠️ CLOUD_CHANNEL_ID is not set in .env! Videos will NOT be uploaded to a channel.")
@@ -52,7 +53,7 @@ MAX_CONCURRENT_DOWNLOADS = 2
 download_semaphore = asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS)
 
 # Regex pattern for TeraBox links
-TERABOX_PATTERN = r"https?://(?:www\.)?(?:1024tera|terabox|teraboxapp|teraboxshare|mirrobox|nephobox|freeterabox|4funbox|momerybox|tibibox|terasharelink)\.com/(?:s/|wap/share/filelist\?surl=)([a-zA-Z0-9_-]+)"
+TERABOX_PATTERN = r"https?://(?:www\.)?(?:1024tera|1024terabox|terabox|teraboxapp|teraboxshare|mirrobox|nephobox|freeterabox|4funbox|momerybox|tibibox|terasharelink)\.com/(?:s/|wap/share/filelist\?surl=)([a-zA-Z0-9_-]+)"
 
 app = Flask('')
 
@@ -121,11 +122,37 @@ class ProgressFileReader:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
+# Dictionary to store active downloads for cancellation
+# Format: {user_id: {"process": subprocess_object, "cancelled": boolean, "task": asyncio_task}}
+active_downloads = {}
+
+async def cancel_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    if not data.startswith("cancel_"):
+        return
+        
+    user_id = int(data.split("_")[1])
+    
+    # Verify if the user clicking is the one who initiated
+    if update.effective_user.id != user_id:
+        await query.answer("❌ You cannot cancel this download.", show_alert=True)
+        return
+
+    if user_id in active_downloads:
+        active_downloads[user_id]["cancelled"] = True
+        await query.edit_message_text("🚫 <b>Download Cancelled by User.</b>", parse_mode='HTML')
+        # The download function checks this flag and stops
+    else:
+        await query.edit_message_text("⚠️ <b>Download already finished or not found.</b>", parse_mode='HTML')
 class ProgressHook:
-    def __init__(self, bot, chat_id, message_id):
+    def __init__(self, bot, chat_id, message_id, user_id):
         self.bot = bot
         self.chat_id = chat_id
         self.message_id = message_id
+        self.user_id = user_id
         self.last_update = 0
         try:
             self.loop = asyncio.get_running_loop()
@@ -133,6 +160,10 @@ class ProgressHook:
             self.loop = None
 
     def __call__(self, d):
+        # Check for cancellation
+        if self.user_id in active_downloads and active_downloads[self.user_id].get("cancelled", False):
+            raise yt_dlp.utils.DownloadError("Download cancelled by user")
+
         if d['status'] == 'downloading':
             now = time.time()
             if now - self.last_update > 5:  # Update every 5 seconds (Optimized)
@@ -155,16 +186,29 @@ class ProgressHook:
                     f"<b>ETA:</b> {eta} ⏳"
                 )
                 
+                # Cancel Button
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_{self.user_id}")]
+                ])
+
                 if self.loop:
                     asyncio.run_coroutine_threadsafe(
                         self.bot.edit_message_text(
                             chat_id=self.chat_id,
                             message_id=self.message_id,
                             text=text,
-                            parse_mode='HTML'
+                            parse_mode='HTML',
+                            reply_markup=keyboard
                         ),
                         self.loop
                     )
+
+def get_progress_bar(percent):
+    """Generates a visual progress bar."""
+    bar_len = 15
+    filled_len = int(bar_len * percent / 100)
+    bar = '⬛️' * filled_len + '⬜️' * (bar_len - filled_len)
+    return bar
 
 def transcode_to_target_size(input_path, target_mb, duration, width=None, height=None):
     try:
@@ -287,6 +331,14 @@ async def download_video(url, output_template, progress_hook):
         'concurrent_fragment_downloads': 5, # Download multiple fragments in parallel
         'buffersize': 1024 * 1024, # 1MB buffer
         'http_chunk_size': 10485760, # 10MB chunks
+        # Aria2c Integration for faster downloads
+        'external_downloader': 'aria2c',
+        'external_downloader_args': [
+            '-x', '16', # 16 connections
+            '-s', '16', # 16 split
+            '-k', '1M', # 1MB min split
+            '--check-certificate=false'
+        ],
         # FFmpeg Post-processing for FastStart (Move moov atom to front)
         'postprocessor_args': {
             'ffmpeg': ['-movflags', '+faststart']
@@ -530,11 +582,14 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
         output_template = f"downloads/{file_id}.%(ext)s"
         
         # Initialize Progress Hook
-        progress_hook = ProgressHook(context.bot, message.chat_id, status_msg.message_id)
+        progress_hook = ProgressHook(context.bot, message.chat_id, status_msg.message_id, user.id)
 
         filename = None
         thumb_path = None
         should_delete_immediately = True # Flag to control deletion
+
+        # Register download for cancellation
+        active_downloads[user.id] = {"cancelled": False}
 
         try:
             # Run download in executor
@@ -561,7 +616,10 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
                                                 text="✅ <b>Download Complete!</b>\n\n📤 Uploading to Telegram...", parse_mode='HTML')
             
             file_size = os.path.getsize(filename)
-            if file_size > 50 * 1024 * 1024:
+            # 50MB for normal bot, 2000MB (2GB) for local API server
+            upload_limit = 2000 * 1024 * 1024 if TELEGRAM_API_URL else 50 * 1024 * 1024
+            
+            if file_size > upload_limit:
                 if ENABLE_WEB_SERVER:
                     file_basename = os.path.basename(filename)
                     stream_link = f"{BASE_URL}/watch/{file_basename}"
@@ -572,6 +630,8 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
                         parse_mode='HTML'
                     )
                     should_delete_immediately = False
+                    
+                    # Schedule deletion
                     async def delete_later(f_path, delay):
                         await asyncio.sleep(delay)
                         try:
@@ -580,20 +640,18 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
                                 logger.info(f"Deleted expired file: {f_path}")
                         except Exception as e:
                             logger.error(f"Error deleting expired file {f_path}: {e}")
+
+                    # Run deletion task in background (30 mins = 1800 sec)
                     asyncio.create_task(delete_later(filename, 1800))
-                    return
                 else:
-                    new_file = transcode_to_target_size(filename, 49, duration, width, height)
-                    if new_file and os.path.getsize(new_file) <= 50 * 1024 * 1024:
-                        filename = new_file
-                    else:
-                        await message.reply_text(
-                            f"❌ <b>File too large to upload.</b>\n"
-                            f"<i>Transcoding failed or file still exceeds limit.</i>",
-                            parse_mode='HTML'
-                        )
-                        return
-                
+                    # Fallback if server disabled: Try to transcode?
+                    # But 2GB is too big to transcode quickly.
+                    await message.reply_text(
+                        f"⚠️ <b>File too large ({file_size/1024/1024:.2f} MB)</b> and Web Server is disabled.\n"
+                        f"Cannot send file.",
+                        parse_mode='HTML'
+                    )
+                    
             else:
                 caption = f"🎬 <b>{video_title}</b>"
                 
@@ -770,9 +828,15 @@ def main() -> None:
 
     # Create the Application and pass it your bot's token.
     # Increase timeouts for large file uploads
+    builder = Application.builder().token(TOKEN)
+    
+    if TELEGRAM_API_URL:
+        logger.info(f"Using Custom Bot API Server: {TELEGRAM_API_URL}")
+        builder.base_url(TELEGRAM_API_URL)
+        builder.base_file_url(f"{TELEGRAM_API_URL}/file/bot")
+
     application = (
-        Application.builder()
-        .token(TOKEN)
+        builder
         .read_timeout(300)   # 5 minutes
         .write_timeout(300)  # 5 minutes
         .connect_timeout(60) # 1 minute
@@ -787,6 +851,7 @@ def main() -> None:
     application.add_handler(CommandHandler("broadcast", admin_broadcast))
     application.add_handler(CommandHandler("del", admin_delete))
     application.add_handler(CommandHandler("setcookie", admin_set_cookie))
+    application.add_handler(CallbackQueryHandler(cancel_download, pattern="^cancel_"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_terabox_link))
 
     # Run the bot
