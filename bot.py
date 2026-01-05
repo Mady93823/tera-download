@@ -281,33 +281,50 @@ def get_video_info(terabox_url):
     
     return None
 
-def get_video_info_multi(file_id, original_url):
+async def get_video_info_multi(file_id, original_url, status_msg=None, context=None, chat_id=None):
     """
     Resilient resolver: tries multiple host variants and retries on timeouts.
+    Prioritizes original_url, then falls back to standard domains.
     """
-    candidates = [
+    # Prioritize the original URL first
+    candidates = [original_url]
+    
+    # Add fallbacks
+    fallbacks = [
         f"https://terabox.com/s/{file_id}",
         f"https://www.1024tera.com/sharing/link?surl={file_id}",
         f"https://teraboxapp.com/wap/share/filelist?surl={file_id}",
-        f"https://teraboxshare.com/s/{file_id}",
-        original_url
     ]
-    # Deduplicate while preserving order
-    seen = set()
-    uniq_candidates = []
-    for u in candidates:
-        if u not in seen:
-            uniq_candidates.append(u)
-            seen.add(u)
+    
+    for fb in fallbacks:
+        if fb != original_url:
+            candidates.append(fb)
 
-    # Retry with exponential backoff per candidate
-    for url in uniq_candidates:
-        for attempt in range(1, 4):
-            info = get_video_info(url)
+    # Limit retries to avoid long waits
+    for idx, url in enumerate(candidates):
+        # Notify user if switching to fallbacks (only if it takes too long)
+        if idx > 0 and status_msg and context:
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id, 
+                    message_id=status_msg.message_id, 
+                    text=f"🔍 <b>Analyzing Link...</b>\nTrying alternative source {idx}/{len(candidates)-1}...", 
+                    parse_mode='HTML'
+                )
+            except Exception:
+                pass
+
+        # Try twice per URL (1s backoff)
+        for attempt in range(1, 3):
+            # Run blocking get_video_info in executor to avoid blocking asyncio loop
+            info = await asyncio.to_thread(get_video_info, url)
+            
             if info and info.get('url'):
                 return info
-            # Backoff: 1s, 2s, 4s
-            time.sleep(2 ** (attempt - 1))
+            
+            # Short sleep between attempts
+            if attempt < 2:
+                await asyncio.sleep(1)
 
     return None
 
@@ -596,7 +613,7 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     status_msg = await message.reply_text(f"🔍 <b>Analyzing Link...</b>\nPlease wait a moment.", parse_mode='HTML')
 
     # Get video info
-    video_info = get_video_info_multi(file_id, terabox_url)
+    video_info = await get_video_info_multi(file_id, terabox_url, status_msg, context, message.chat_id)
     
     if not video_info or not video_info['url']:
         # If the original URL looks like a folder/multi-file share, inform the user
