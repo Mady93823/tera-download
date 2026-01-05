@@ -6,6 +6,8 @@ import asyncio
 import urllib.parse
 import subprocess
 import tempfile
+import base64
+import json
 from http.cookies import SimpleCookie
 from flask import Flask, send_from_directory
 from threading import Thread
@@ -251,6 +253,57 @@ def transcode_to_target_size(input_path, target_mb, duration, width=None, height
     except Exception as e:
         logger.error(f"Transcode error: {e}")
     return None
+def get_proxy_url(file_id):
+    """
+    Generates the worker URL for the proxy using XOR + Base64 encoding.
+    """
+    key = "cheemsbackup"
+    key_bytes = key.encode('utf-8')
+    file_id_bytes = file_id.encode('utf-8')
+    xor_bytes = bytearray()
+    for i in range(len(file_id_bytes)):
+        xor_bytes.append(file_id_bytes[i] ^ key_bytes[i % len(key_bytes)])
+    encoded_id = base64.b64encode(xor_bytes).decode('utf-8')
+    return f"https://icy-broor12.arjunavai273.workers.dev/?id={encoded_id}"
+
+def get_video_info_from_proxy(file_id):
+    """
+    Tries to get video info using the proxy.
+    Returns dict or None.
+    """
+    # Ensure ID starts with 1 if it doesn't, just to be safe, or try both.
+    ids_to_try = [file_id]
+    if not file_id.startswith('1'):
+        ids_to_try.append('1' + file_id)
+        
+    for fid in ids_to_try:
+        url = get_proxy_url(fid)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Referer": "https://terabox.beer/",
+            "Origin": "https://terabox.beer"
+        }
+        try:
+            # Use stream=True to avoid downloading the whole m3u8 if it's huge (unlikely)
+            # but mainly to just check headers first if we wanted.
+            # Here we just want the final URL and validity.
+            response = requests.get(url, headers=headers, allow_redirects=True, timeout=10)
+            
+            if response.status_code == 200:
+                # Check content type or content
+                c_type = response.headers.get('Content-Type', '')
+                # M3U8 is usually application/vnd.apple.mpegurl or application/x-mpegURL
+                if 'mpegurl' in c_type.lower() or '#EXTM3U' in response.text[:50]:
+                    return {
+                        'title': f'Terabox Video {fid}',
+                        'thumbnail': None,
+                        'url': response.url  # The final redirected URL (likely direct stream)
+                    }
+        except Exception as e:
+            logger.error(f"Proxy error for {fid}: {e}")
+            
+    return None
+
 def get_video_info(terabox_url):
     """
     Extracts the video info (url, title, thumbnail) using terabox-downloader.
@@ -286,6 +339,25 @@ async def get_video_info_multi(file_id, original_url, status_msg=None, context=N
     Resilient resolver: tries multiple host variants and retries on timeouts.
     Prioritizes original_url, then falls back to standard domains.
     """
+    # 1. Try external proxy first (fastest and requested by user)
+    try:
+        if status_msg and context:
+             try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id, 
+                    message_id=status_msg.message_id, 
+                    text=f"🔍 <b>Analyzing Link...</b>\nChecking proxy server...", 
+                    parse_mode='HTML'
+                )
+             except Exception:
+                pass
+        
+        info = await asyncio.to_thread(get_video_info_from_proxy, file_id)
+        if info:
+            return info
+    except Exception as e:
+        logger.error(f"Proxy attempt failed: {e}")
+
     # Prioritize the original URL first
     candidates = [original_url]
     
