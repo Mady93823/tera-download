@@ -497,7 +497,12 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     db.add_user(user.id, user.first_name, user.username)
 
     # Check for TeraBox link
-    match = re.search(TERABOX_PATTERN, text)
+    match = re.search(TERABOX_PATTERN, text, re.IGNORECASE)
+    if not match:
+        # Try a broader fallback pattern for any terabox-like domain
+        fallback_pattern = r"https?://[a-zA-Z0-9.-]+(?:tera|box)[a-zA-Z0-9.-]*\.[a-z]+/(?:s/|.*?surl=)([a-zA-Z0-9_-]+)"
+        match = re.search(fallback_pattern, text, re.IGNORECASE)
+        
     if not match:
         await message.reply_text("❌ <b>Invalid Link</b>\nPlease send a valid TeraBox link.", parse_mode='HTML')
         return
