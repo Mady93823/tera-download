@@ -322,11 +322,11 @@ async def download_video(url, output_template, progress_hook):
         'format': 'best',
         'noplaylist': True,
         'quiet': True,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'progress_hooks': [progress_hook],
-        'socket_timeout': 30,  # Increase timeout
-        'retries': 10,        # Retry on 5xx or timeout
-        'fragment_retries': 10,
+        'socket_timeout': 120,  # Increase timeout
+        'retries': 20,        # Retry on 5xx or timeout
+        'fragment_retries': 20,
         # Speed optimizations
         'concurrent_fragment_downloads': 5, # Download multiple fragments in parallel
         'buffersize': 1024 * 1024, # 1MB buffer
