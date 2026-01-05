@@ -727,7 +727,6 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # Create Play Button
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("▶️ Play Video", web_app=WebAppInfo(url=player_url))],
             [InlineKeyboardButton("🔗 Direct Link", url=stream_url)]
         ])
         
