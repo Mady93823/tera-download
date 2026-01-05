@@ -38,12 +38,20 @@ TERABOX_COOKIE = os.getenv('TERABOX_COOKIE')
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
 ENABLE_WEB_SERVER = os.getenv('ENABLE_WEB_SERVER', 'true').lower() == 'true'
 TELEGRAM_API_URL = os.getenv('TELEGRAM_API_URL') # Optional: Custom Bot API URL
+HTTP_PROXY = os.getenv('HTTP_PROXY')
+HTTPS_PROXY = os.getenv('HTTPS_PROXY')
 
 if not CLOUD_CHANNEL_ID:
     logger.warning("⚠️ CLOUD_CHANNEL_ID is not set in .env! Videos will NOT be uploaded to a channel.")
 
 if not TERABOX_COOKIE:
     logger.warning("⚠️ TERABOX_COOKIE is not set in .env! Downloading might fail.")
+
+# Apply proxies from .env if provided
+if HTTP_PROXY:
+    os.environ['HTTP_PROXY'] = HTTP_PROXY
+if HTTPS_PROXY:
+    os.environ['HTTPS_PROXY'] = HTTPS_PROXY
 
 # Initialize Database
 db = Database()
@@ -271,6 +279,40 @@ def get_video_info(terabox_url):
     except Exception as e:
         logger.error(f"Error extracting video info: {e}")
     
+    return None
+
+def get_video_info_multi(file_id, original_url):
+    """
+    Resilient resolver: tries multiple host variants and retries on timeouts.
+    """
+    candidates = [
+        f"https://terabox.com/s/{file_id}",
+        f"https://www.1024tera.com/sharing/link?surl={file_id}",
+        f"https://teraboxapp.com/wap/share/filelist?surl={file_id}",
+        f"https://teraboxshare.com/s/{file_id}",
+        original_url
+    ]
+    # Deduplicate while preserving order
+    seen = set()
+    uniq_candidates = []
+    for u in candidates:
+        if u not in seen:
+            uniq_candidates.append(u)
+            seen.add(u)
+
+    # Retry with exponential backoff per candidate
+    for url in uniq_candidates:
+        for attempt in range(1, 4):
+            info = get_video_info(url)
+            if info and info.get('url'):
+                return info
+            # Backoff: 1s, 2s, 4s
+            try:
+                asyncio.sleep(0.001)  # yield
+            except Exception:
+                pass
+            time.sleep(2 ** (attempt - 1))
+
     return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -523,7 +565,8 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
         
     # FORCE normalize to terabox.com to ensure downloader compatibility
     # Many domains (teraboxshare, 1024tera, etc.) share the same ID structure
-    terabox_url = f"https://terabox.com/s/{file_id}"
+    # Do not force a single host; try multiple hosts for resilience
+    # terabox_url remains the original URL the user sent
     
     # Check if video exists in DB
     cached_video = db.get_video(file_id)
@@ -548,7 +591,7 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     status_msg = await message.reply_text(f"🔍 <b>Analyzing Link...</b>\nPlease wait a moment.", parse_mode='HTML')
 
     # Get video info
-    video_info = get_video_info(terabox_url)
+    video_info = get_video_info_multi(file_id, terabox_url)
     
     if not video_info or not video_info['url']:
         await context.bot.edit_message_text(chat_id=message.chat_id, message_id=status_msg.message_id, 
