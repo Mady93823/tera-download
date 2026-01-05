@@ -53,7 +53,7 @@ MAX_CONCURRENT_DOWNLOADS = 2
 download_semaphore = asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS)
 
 # Regex pattern for TeraBox links
-TERABOX_PATTERN = r"https?://(?:www\.)?(?:1024tera|1024terabox|terabox|teraboxapp|teraboxshare|mirrobox|nephobox|freeterabox|4funbox|momerybox|tibibox|terasharelink)\.com/(?:s/|wap/share/filelist\?surl=)([a-zA-Z0-9_-]+)"
+TERABOX_PATTERN = r"https?://(?:www\.)?(?:1024tera|1024terabox|terabox|teraboxapp|teraboxshare|mirrobox|nephobox|freeterabox|4funbox|momerybox|tibibox|terasharelink)\.com/(?:s/|wap/share/filelist\?surl=|sharing/link\?surl=)([a-zA-Z0-9_-]+)"
 
 app = Flask('')
 
