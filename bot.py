@@ -307,13 +307,18 @@ def get_video_info_multi(file_id, original_url):
             if info and info.get('url'):
                 return info
             # Backoff: 1s, 2s, 4s
-            try:
-                asyncio.sleep(0.001)  # yield
-            except Exception:
-                pass
             time.sleep(2 ** (attempt - 1))
 
     return None
+
+def vps_limit_note():
+    if not ENABLE_WEB_SERVER:
+        return (
+            "\n\n⚠️ VPS limitation: Web server is disabled (no public ports). "
+            "Stream links are unavailable. For files >50MB, configure TELEGRAM_API_URL "
+            "to use a local Bot API server, or deploy where a public port is available."
+        )
+    return ""
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -548,12 +553,12 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not match:
         # Debugging: Print what was received
         logger.info(f"Failed to match link in text: {text!r}")
-        await message.reply_text(
+        err_text = (
             f"❌ <b>Invalid Link (v2.1)</b>\n"
             f"I could not detect a valid TeraBox link in your message.\n"
-            f"<b>Received:</b> <code>{text[:100]}</code>", 
-            parse_mode='HTML'
+            f"<b>Received:</b> <code>{text[:100]}</code>"
         )
+        await message.reply_text(err_text + vps_limit_note(), parse_mode='HTML')
         return
 
     terabox_url = match.group(0) # Use the full matched URL
@@ -596,24 +601,25 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not video_info or not video_info['url']:
         # If the original URL looks like a folder/multi-file share, inform the user
         if ("sharing/link" in terabox_url) or ("filelist" in terabox_url):
+            folder_text = (
+                "📁 <b>Folder Link Detected</b>\n\n"
+                "This share appears to contain multiple files. Please send a <b>direct file link</b> from inside the folder:\n\n"
+                "• Open the folder link in your browser/app\n"
+                "• Tap the file you want\n"
+                "• Copy its share link (it should end with <code>/s/...</code>)\n\n"
+                "Then paste that file link here."
+            )
             await context.bot.edit_message_text(
                 chat_id=message.chat_id,
                 message_id=status_msg.message_id,
-                text=(
-                    "📁 <b>Folder Link Detected</b>\n\n"
-                    "This share appears to contain multiple files. Please send a <b>direct file link</b> from inside the folder:\n\n"
-                    "• Open the folder link in your browser/app\n"
-                    "• Tap the file you want\n"
-                    "• Copy its share link (it should end with <code>/s/...</code>)\n\n"
-                    "Then paste that file link here."
-                ),
+                text=folder_text + vps_limit_note(),
                 parse_mode='HTML'
             )
         else:
             await context.bot.edit_message_text(
                 chat_id=message.chat_id,
                 message_id=status_msg.message_id,
-                text="❌ <b>Error:</b> Failed to extract video.\nThe link might be invalid or expired.",
+                text="❌ <b>Error:</b> Failed to extract video.\nThe link might be invalid or expired." + vps_limit_note(),
                 parse_mode='HTML'
             )
         return
