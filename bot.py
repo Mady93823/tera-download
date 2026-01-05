@@ -14,7 +14,7 @@ from threading import Thread
 import yt_dlp
 import requests
 from dotenv import load_dotenv
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from db import Database
 from TeraboxDL import TeraboxDL
@@ -75,6 +75,48 @@ def home():
 def stream_video(filename):
     # Enable Range requests for streaming
     return send_from_directory('downloads', filename)
+
+@app.route('/player')
+def video_player():
+    from flask import request
+    file_id = request.args.get('id')
+    if not file_id:
+        return "Missing file ID", 400
+        
+    # Generate proxy URL
+    video_url = get_proxy_url(file_id)
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Video Player</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {{ margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; }}
+            video {{ width: 100%; max-width: 800px; height: auto; }}
+        </style>
+        <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    </head>
+    <body>
+        <video id="video" controls autoplay playsinline></video>
+        <script>
+            var video = document.getElementById('video');
+            var videoSrc = "{video_url}";
+            
+            if (Hls.isSupported()) {{
+                var hls = new Hls();
+                hls.loadSource(videoSrc);
+                hls.attachMedia(video);
+            }}
+            else if (video.canPlayType('application/vnd.apple.mpegurl')) {{
+                video.src = videoSrc;
+            }}
+        </script>
+    </body>
+    </html>
+    """
+    return html
 
 def run():
     app.run(host='0.0.0.0', port=8000)
@@ -297,7 +339,9 @@ def get_video_info_from_proxy(file_id):
                     return {
                         'title': f'Terabox Video {fid}',
                         'thumbnail': None,
-                        'url': response.url  # The final redirected URL (likely direct stream)
+                        'url': response.url,  # The final redirected URL (likely direct stream)
+                        'is_proxy': True,
+                        'size': 0 # Unknown size
                     }
         except Exception as e:
             logger.error(f"Proxy error for {fid}: {e}")
@@ -323,7 +367,9 @@ def get_video_info(terabox_url):
         result = {
             'title': file_info.get('file_name', 'TeraBox Video'),
             'thumbnail': file_info.get('thumbnail', None),
-            'url': file_info.get('download_link', None)
+            'url': file_info.get('download_link', None),
+            'size': int(file_info.get('size', 0)),
+            'is_proxy': False
         }
         
         if result['url']:
@@ -722,8 +768,42 @@ async def handle_terabox_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     info_text = (
         f"🎬 <b>Found Video!</b>\n"
         f"<b>Title:</b> {video_title}\n"
-        f"⬇️ Starting download..."
     )
+
+    # Check for Large File / Proxy Stream
+    # 50MB limit for streaming logic
+    STREAM_THRESHOLD = 50 * 1024 * 1024
+    
+    # If using proxy (assumed large/streamable) OR size > 50MB
+    if video_info.get('is_proxy') or video_info.get('size', 0) > STREAM_THRESHOLD:
+        
+        # Prepare Web App URL
+        # We need an HTTPS URL. 
+        # If BASE_URL is not https, Telegram WebApp might fail on mobile but work on desktop?
+        # Ideally user should have HTTPS.
+        player_url = f"{BASE_URL}/player?id={file_id}"
+        
+        # Create Play Button
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("▶️ Play Video", web_app=WebAppInfo(url=player_url))],
+            # Add a fallback link button just in case
+            # [InlineKeyboardButton("🔗 Direct Link", url=direct_url)] 
+        ])
+        
+        # Update text to indicate streaming
+        stream_text = f"{info_text}\n⚠️ <b>File is large or stream-only.</b>\nTap the button below to play instantly!"
+        
+        await context.bot.edit_message_text(
+            chat_id=message.chat_id, 
+            message_id=status_msg.message_id, 
+            text=stream_text, 
+            parse_mode='HTML',
+            reply_markup=keyboard
+        )
+        return
+
+    # Proceed to download for smaller files
+    info_text += f"⬇️ Starting download..."
     
     # If thumbnail exists, we might want to delete text message and send photo, 
     # but editing text is smoother for progress. We'll stick to text edit for progress.
